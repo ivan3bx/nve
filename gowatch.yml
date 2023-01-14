@@ -8,7 +8,7 @@
 # run_cmd: "./run.sh"
  
 # Specify the directory where the compiled object files are stored
-# output: /bin/app
+#output: ./dist
 
 # The file name suffix that needs to be monitored. By default, there is only a '.go' file.
 # watch_exts:
@@ -36,9 +36,10 @@ vendor_watch: false
 # Directory that do not need to listen for file changes
 excluded_paths:
   - ./tmp
+  - ./dist
 
 # main package path, can also be a single file, multiple files separated by commas
-build_pkg: ""
+build_pkg: "cmd"
 
 # build tags
 build_tags: ""
