@@ -5,7 +5,7 @@
 
 # Specify the command to run after builds done
 run_cmd: "./dist/cmd"
- 
+
 # Specify the directory where the compiled object files are stored
 output: ./dist
 
