@@ -41,7 +41,7 @@ excluded_paths:
 build_pkg: "./cmd"
 
 # build tags
-build_tags: ""
+build_tags: "sqlite_fts5"
 
 # Commands that can be executed before build the app
 # prev_build_cmds:
