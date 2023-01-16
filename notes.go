@@ -1,7 +1,6 @@
 package nve
 
 import (
-	"database/sql"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3" // sqlite driver
@@ -9,14 +8,14 @@ import (
 
 type Notes struct {
 	Query     string
-	db        *sql.DB
+	db        *DB
 	observers []Observer
 }
 
 var DBNAME = "nve.db"
 
 func NewNotes() *Notes {
-	notes := &Notes{db: initializeDB()}
+	notes := &Notes{db: MustOpen(DBNAME)}
 
 	if err := notes.refresh(); err != nil {
 		panic(err)
@@ -55,14 +54,7 @@ func (n *Notes) refresh() error {
 		stats, _ := os.Stat(file)
 
 		// Skip unmodified documents
-		var count int
-
-		if err := db.QueryRow("SELECT count(*) FROM documents WHERE filename = ? AND md5 = ? AND modified_at = ?", file, md5, stats.ModTime()).Scan(&count); err != nil {
-			return err
-		}
-
-		if count > 0 {
-			// skip unmodified documents
+		if db.IsIndexed(file, md5, stats.ModTime()) {
 			continue
 		}
 
@@ -71,7 +63,7 @@ func (n *Notes) refresh() error {
 			return err
 		}
 
-		if err := insertDocument(db, file, md5, stats.ModTime(), bytes); err != nil {
+		if err := db.Insert(file, md5, stats.ModTime(), bytes); err != nil {
 			return err
 		}
 	}
