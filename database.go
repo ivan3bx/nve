@@ -46,7 +46,7 @@ func MustOpen(file string) *DB {
 func (db *DB) IsUnmodified(fileRef *FileRef) bool {
 	var count int
 
-	if err := db.QueryRow(`
+	err := db.QueryRow(`
 		SELECT count(*)
 		FROM
 			documents
@@ -56,7 +56,9 @@ func (db *DB) IsUnmodified(fileRef *FileRef) bool {
 			md5 = ?
 		AND
 			modified_at = ?
-	`, fileRef.Filename, fileRef.MD5, fileRef.ModifiedAt).Scan(&count); err != nil {
+	`, fileRef.Filename, fileRef.MD5, fileRef.ModifiedAt).Scan(&count)
+
+	if err != nil {
 		return false
 	}
 

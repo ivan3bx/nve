@@ -1,7 +1,6 @@
 package nve
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -9,49 +8,54 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var dbPath string
-var db *DB
+func withNewDB(runtest func(db *DB)) {
+	withNewDBPath(func(db *DB, dbPath string) {
+		runtest(db)
+	})
+}
 
-func init() {
+func withNewDBPath(runtest func(db *DB, dbPath string)) {
 	tempFile, err := os.CreateTemp(os.TempDir(), "*.db")
 	if err != nil {
 		panic(err)
 	}
-	dbPath = tempFile.Name()
-	fmt.Println(dbPath)
+	dbPath := tempFile.Name()
 	os.Remove(dbPath)
-}
 
-func teardown() {
-	if db != nil {
-		db.Close()
-	}
-	os.Remove(dbPath)
+	db := MustOpen(dbPath)
+	defer func() {
+		if db != nil {
+			db.Close()
+		}
+		os.Remove(dbPath)
+	}()
+
+	runtest(db, dbPath)
 }
 
 func TestDatabaseInitialization(t *testing.T) {
 	testCases := []struct {
 		name   string
-		setup  func(*DB)
-		assert func(*testing.T, *DB)
+		setup  func(db *DB, dbPath string) *DB
+		assert func(*testing.T, *DB, string)
 	}{
 		{
 			name: "Creates a new database",
 
-			assert: func(t *testing.T, d *DB) {
+			assert: func(t *testing.T, d *DB, dbPath string) {
 				_, err := os.Stat(dbPath)
 				assert.NoError(t, err, "DB does not exist")
 			},
 		},
 		{
-			name: "Re-opens xisting database",
+			name: "Re-opens existing database",
 
-			setup: func(d *DB) {
-				d.Close()
-				db = MustOpen(dbPath)
+			setup: func(db *DB, dbPath string) *DB {
+				db.Close()
+				return MustOpen(dbPath)
 			},
 
-			assert: func(t *testing.T, d *DB) {
+			assert: func(t *testing.T, db *DB, dbPath string) {
 				if err := db.Ping(); err != nil {
 					assert.NoError(t, err, "DB did not open")
 				}
@@ -61,14 +65,13 @@ func TestDatabaseInitialization(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db = MustOpen(dbPath)
-			defer teardown()
+			withNewDBPath(func(db *DB, dbPath string) {
+				if tc.setup != nil {
+					db = tc.setup(db, dbPath)
+				}
 
-			if tc.setup != nil {
-				tc.setup(db)
-			}
-
-			tc.assert(t, db)
+				tc.assert(t, db, dbPath)
+			})
 		})
 	}
 }
@@ -90,7 +93,7 @@ func TestDocumentInsertion(t *testing.T) {
 		},
 		{
 			name:   "is indexed",
-			assert: func(t *testing.T, d *DB) { checkIsUnmodified(t, db, fileRef) },
+			assert: func(t *testing.T, db *DB) { checkIsUnmodified(t, db, fileRef) },
 		},
 		{
 			name:   "requires filename",
@@ -123,16 +126,14 @@ func TestDocumentInsertion(t *testing.T) {
 			}
 			data = []byte("some data")
 
-			db = MustOpen(dbPath)
+			withNewDB(func(db *DB) {
+				if tc.setup != nil {
+					tc.setup()
+				}
 
-			defer teardown()
-
-			if tc.setup != nil {
-				tc.setup()
-			}
-
-			db.Upsert(fileRef, data)
-			tc.assert(t, db)
+				db.Upsert(fileRef, data)
+				tc.assert(t, db)
+			})
 		})
 	}
 }
@@ -147,33 +148,66 @@ func TestDocumentUpdate(t *testing.T) {
 		}
 	)
 
-	db = MustOpen(dbPath)
-
-	// Insert initial record
-	err := db.Insert(&fileRef, data)
-
-	if err != nil {
-		assert.FailNow(t, "Query failed", err)
+	testCases := []struct {
+		name          string
+		update        *FileRef
+		expectChanged bool
+	}{
+		{
+			name: "updates when MD5 changes",
+			update: &FileRef{
+				Filename:   fileRef.Filename,
+				MD5:        "NEW MD5____",
+				ModifiedAt: fileRef.ModifiedAt,
+			},
+			expectChanged: true,
+		},
+		{
+			name: "updates when modified timestamp changes",
+			update: &FileRef{
+				Filename:   fileRef.Filename,
+				MD5:        fileRef.MD5,
+				ModifiedAt: time.Now().Add(5 * time.Second),
+			},
+			expectChanged: true,
+		},
+		{
+			name:          "does not update with zero changes",
+			update:        &fileRef,
+			expectChanged: false,
+		},
 	}
 
-	newRef := fileRef
-	newRef.MD5 = "NEW_MD5"
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			withNewDB(func(db *DB) {
+				// Insert initial record
+				err := db.Insert(&fileRef, data)
 
-	if err := db.Upsert(&newRef, []byte("fresher data")); err != nil {
-		assert.FailNow(t, "upsert failed", err)
+				if err != nil {
+					assert.FailNow(t, "Query failed", err)
+				}
+
+				newRef := tc.update
+
+				if err := db.Upsert(newRef, []byte("fresher data")); err != nil {
+					assert.FailNow(t, "upsert failed", err)
+				}
+
+				var currentData []string
+				if err := db.Select(&currentData, "SELECT text from content_index"); err != nil {
+					assert.FailNow(t, "index did not return results", err)
+				}
+
+				if tc.expectChanged {
+					assert.Equal(t, "fresher data", currentData[0], "document data was not updated")
+				} else {
+					assert.Equal(t, "some data", currentData[0], "document data was updated")
+				}
+
+			})
+		})
 	}
-
-	var currentData []string
-	if err := db.Select(&currentData, "SELECT text from content_index"); err != nil {
-		assert.FailNow(t, "index did not return results", err)
-	}
-
-	if len(currentData) != 1 {
-		assert.FailNowf(t, "invalid number of rows", "expected '1', was '%v'", len(currentData))
-	}
-
-	assert.Equal(t, "fresher data", currentData[0], "document data was not updated")
-
 }
 
 func checkCount(t *testing.T, db *DB, expected int) {
