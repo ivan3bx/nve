@@ -75,10 +75,8 @@ func TestDatabaseInitialization(t *testing.T) {
 
 func TestDocumentInsertion(t *testing.T) {
 	var (
-		filename   string
-		md5        string
-		modifiedAt time.Time
-		data       []byte
+		fileRef *FileRef
+		data    []byte
 	)
 
 	testCases := []struct {
@@ -92,21 +90,21 @@ func TestDocumentInsertion(t *testing.T) {
 		},
 		{
 			name:   "is indexed",
-			assert: func(t *testing.T, d *DB) { checkIsIndexed(t, db, filename, md5, modifiedAt) },
+			assert: func(t *testing.T, d *DB) { checkIsIndexed(t, db, fileRef) },
 		},
 		{
 			name:   "requires filename",
-			setup:  func() { filename = "" },
+			setup:  func() { fileRef.Filename = "" },
 			assert: func(t *testing.T, db *DB) { checkCount(t, db, 0) },
 		},
 		{
 			name:   "requires md5",
-			setup:  func() { md5 = "" },
+			setup:  func() { fileRef.MD5 = "" },
 			assert: func(t *testing.T, db *DB) { checkCount(t, db, 0) },
 		},
 		{
 			name:   "requires last modified date",
-			setup:  func() { modifiedAt = time.Time{} },
+			setup:  func() { fileRef.ModifiedAt = time.Time{} },
 			assert: func(t *testing.T, db *DB) { checkCount(t, db, 0) },
 		},
 		{
@@ -118,9 +116,11 @@ func TestDocumentInsertion(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			filename = "/tmp/some_file.txt"
-			md5 = "b9fe6c5ee4966accc23e32adea6f537d"
-			modifiedAt = time.Now()
+			fileRef = &FileRef{
+				Filename:   "/tmp/some_file.txt",
+				MD5:        "b9fe6c5ee4966accc23e32adea6f537d",
+				ModifiedAt: time.Now(),
+			}
 			data = []byte("some data")
 
 			db = MustOpen(dbPath)
@@ -131,7 +131,7 @@ func TestDocumentInsertion(t *testing.T) {
 				tc.setup()
 			}
 
-			db.Insert(filename, md5, modifiedAt, data)
+			db.Insert(fileRef, data)
 			tc.assert(t, db)
 		})
 	}
@@ -175,8 +175,8 @@ func checkCount(t *testing.T, db *DB, expected int) {
 	}
 }
 
-func checkIsIndexed(t *testing.T, db *DB, filename, md5 string, modifiedAt time.Time) {
-	if !db.IsIndexed(filename, md5, modifiedAt) {
-		t.Errorf("expected file '%s' to appear in index", filename)
+func checkIsIndexed(t *testing.T, db *DB, fileRef *FileRef) {
+	if !db.IsIndexed(fileRef) {
+		t.Errorf("expected file '%s' to appear in index", fileRef.Filename)
 	}
 }

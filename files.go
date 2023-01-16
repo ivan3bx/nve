@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var SUPPORTED_FILETYPES = map[string]bool{
@@ -14,6 +15,12 @@ var SUPPORTED_FILETYPES = map[string]bool{
 	".md":    true,
 	".mdown": true,
 	".go":    true,
+}
+
+type FileRef struct {
+	Filename   string    `db:"filename"`
+	MD5        string    `db:"md5"`
+	ModifiedAt time.Time `db:"modified_at"`
 }
 
 func scanCurrentDirectory() []string {

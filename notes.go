@@ -53,8 +53,14 @@ func (n *Notes) refresh() error {
 		md5, _ := calculateMD5(file)
 		stats, _ := os.Stat(file)
 
+		ref := FileRef{
+			Filename:   file,
+			MD5:        md5,
+			ModifiedAt: stats.ModTime(),
+		}
+
 		// Skip unmodified documents
-		if db.IsIndexed(file, md5, stats.ModTime()) {
+		if db.IsIndexed(&ref) {
 			continue
 		}
 
@@ -63,7 +69,7 @@ func (n *Notes) refresh() error {
 			return err
 		}
 
-		if err := db.Insert(file, md5, stats.ModTime(), bytes); err != nil {
+		if err := db.Insert(&ref, bytes); err != nil {
 			return err
 		}
 	}

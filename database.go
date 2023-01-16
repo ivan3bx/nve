@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -44,24 +43,34 @@ func MustOpen(file string) *DB {
 	return &DB{db}
 }
 
-func (db *DB) IsIndexed(file, md5 string, modifiedAt time.Time) bool {
+func (db *DB) IsIndexed(fileRef *FileRef) bool {
 	var count int
 
-	if err := db.QueryRow("SELECT count(*) FROM documents WHERE filename = ? AND md5 = ? AND modified_at = ?", file, md5, modifiedAt).Scan(&count); err != nil {
+	if err := db.QueryRow(`
+		SELECT count(*)
+		FROM
+			documents
+		WHERE
+			filename = ?
+		AND
+			md5 = ?
+		AND
+			modified_at = ?
+	`, fileRef.Filename, fileRef.MD5, fileRef.ModifiedAt).Scan(&count); err != nil {
 		return false
 	}
 
 	return count > 0
 }
 
-func (db *DB) Insert(filepath string, md5 string, modifiedAt time.Time, data []byte) error {
-	if filepath == "" {
+func (db *DB) Insert(fileRef *FileRef, data []byte) error {
+	if fileRef.Filename == "" {
 		return errors.New("filename is blank")
 	}
-	if md5 == "" {
+	if fileRef.MD5 == "" {
 		return errors.New("md5 is blank")
 	}
-	if modifiedAt.IsZero() {
+	if fileRef.ModifiedAt.IsZero() {
 		return errors.New("modifiedAt is not defined")
 	}
 
@@ -73,7 +82,7 @@ func (db *DB) Insert(filepath string, md5 string, modifiedAt time.Time, data []b
 			md5 = ?
 		AND
 			modified_at = ?
-	`, filepath, md5, modifiedAt).Scan()
+	`, fileRef.Filename, fileRef.MD5, fileRef.ModifiedAt).Scan()
 
 	if err == sql.ErrNoRows {
 		// Insert
@@ -82,13 +91,13 @@ func (db *DB) Insert(filepath string, md5 string, modifiedAt time.Time, data []b
 			docId int64
 		)
 
-		res, err = db.Exec(`
+		res, err = db.NamedExec(`
 			INSERT INTO documents
 				(filename, md5, modified_at)
 			VALUES
-				(?, ?, ?)
+				(:filename, :md5, :modified_at)
 			ON CONFLICT(filename) DO NOTHING;
-		`, filepath, md5, modifiedAt)
+		`, fileRef)
 
 		if err != nil {
 			return err
@@ -104,8 +113,8 @@ func (db *DB) Insert(filepath string, md5 string, modifiedAt time.Time, data []b
 			INSERT INTO content_index
 				(document_id, filename, text)
 			VALUES
-				(?, ?, ?);
-		`, docId, filepath, string(data))
+				(?, , ?);
+		`, docId, fileRef.Filename, string(data))
 	}
 
 	return err
