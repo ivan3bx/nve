@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var dbPath string
@@ -38,9 +40,7 @@ func TestDatabaseInitialization(t *testing.T) {
 
 			assert: func(t *testing.T, d *DB) {
 				_, err := os.Stat(dbPath)
-				if err == os.ErrNotExist {
-					t.Error("DB does not exist")
-				}
+				assert.NoError(t, err, "DB does not exist")
 			},
 		},
 		{
@@ -53,7 +53,7 @@ func TestDatabaseInitialization(t *testing.T) {
 
 			assert: func(t *testing.T, d *DB) {
 				if err := db.Ping(); err != nil {
-					t.Error("DB did not open")
+					assert.NoError(t, err, "DB did not open")
 				}
 			},
 		},
@@ -90,7 +90,7 @@ func TestDocumentInsertion(t *testing.T) {
 		},
 		{
 			name:   "is indexed",
-			assert: func(t *testing.T, d *DB) { checkIsIndexed(t, db, fileRef) },
+			assert: func(t *testing.T, d *DB) { checkIsUnmodified(t, db, fileRef) },
 		},
 		{
 			name:   "requires filename",
@@ -131,40 +131,50 @@ func TestDocumentInsertion(t *testing.T) {
 				tc.setup()
 			}
 
-			db.Insert(fileRef, data)
+			db.Upsert(fileRef, data)
 			tc.assert(t, db)
 		})
 	}
 }
 
-// func TestDocumentUpdate(t *testing.T) {
-// 	var (
-// 		filename   = "/tmp/some_file.txt"
-// 		md5        = "b9fe6c5ee4966accc23e32adea6f537d"
-// 		modifiedAt = time.Now()
-// 		data       = []byte("some data")
-// 	)
+func TestDocumentUpdate(t *testing.T) {
+	var (
+		data    = []byte("some data")
+		fileRef = FileRef{
+			Filename:   "/tmp/some_file.txt",
+			MD5:        "b9fe6c5ee4966accc23e32adea6f537d",
+			ModifiedAt: time.Now(),
+		}
+	)
 
-// 	db = MustOpen(dbPath)
-// 	db.Insert(filename, md5, modifiedAt, data)
+	db = MustOpen(dbPath)
 
-// 	db.Insert(filename, "NEW_MD5", modifiedAt, []byte("fresher data"))
+	// Insert initial record
+	err := db.Insert(&fileRef, data)
 
-// 	var currentData []string
-// 	if err := db.Select(&currentData, "SELECT text from content_index"); err != nil {
-// 		t.Error(err)
-// 		return
-// 	}
+	if err != nil {
+		assert.FailNow(t, "Query failed", err)
+	}
 
-// 	if len(currentData) > 1 {
-// 		t.Errorf("invalid number of rows. expected '1', was '%v'", len(currentData))
-// 	}
+	newRef := fileRef
+	newRef.MD5 = "NEW_MD5"
 
-// 	if currentData[0] != "fresher data" {
-// 		t.Error("document data was not updated")
-// 	}
+	if err := db.Upsert(&newRef, []byte("fresher data")); err != nil {
+		assert.FailNow(t, "upsert failed", err)
+	}
 
-// }
+	var currentData []string
+	if err := db.Select(&currentData, "SELECT text from content_index"); err != nil {
+		assert.FailNow(t, "index did not return results", err)
+	}
+
+	if len(currentData) != 1 {
+		assert.FailNowf(t, "invalid number of rows", "expected '1', was '%v'", len(currentData))
+	}
+
+	assert.Equal(t, "fresher data", currentData[0], "document data was not updated")
+
+}
 
 func checkCount(t *testing.T, db *DB, expected int) {
 	var count int
@@ -175,8 +185,8 @@ func checkCount(t *testing.T, db *DB, expected int) {
 	}
 }
 
-func checkIsIndexed(t *testing.T, db *DB, fileRef *FileRef) {
-	if !db.IsIndexed(fileRef) {
+func checkIsUnmodified(t *testing.T, db *DB, fileRef *FileRef) {
+	if !db.IsUnmodified(fileRef) {
 		t.Errorf("expected file '%s' to appear in index", fileRef.Filename)
 	}
 }

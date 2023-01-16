@@ -60,7 +60,7 @@ func (n *Notes) refresh() error {
 		}
 
 		// Skip unmodified documents
-		if db.IsIndexed(&ref) {
+		if db.IsUnmodified(&ref) {
 			continue
 		}
 
@@ -69,7 +69,7 @@ func (n *Notes) refresh() error {
 			return err
 		}
 
-		if err := db.Insert(&ref, bytes); err != nil {
+		if err := db.Upsert(&ref, bytes); err != nil {
 			return err
 		}
 	}

@@ -18,6 +18,7 @@ var SUPPORTED_FILETYPES = map[string]bool{
 }
 
 type FileRef struct {
+	DocumentID int64     `db:"id"`
 	Filename   string    `db:"filename"`
 	MD5        string    `db:"md5"`
 	ModifiedAt time.Time `db:"modified_at"`

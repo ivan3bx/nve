@@ -2,10 +2,10 @@ package nve
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 type DB struct {
@@ -43,7 +43,7 @@ func MustOpen(file string) *DB {
 	return &DB{db}
 }
 
-func (db *DB) IsIndexed(fileRef *FileRef) bool {
+func (db *DB) IsUnmodified(fileRef *FileRef) bool {
 	var count int
 
 	if err := db.QueryRow(`
@@ -63,7 +63,29 @@ func (db *DB) IsIndexed(fileRef *FileRef) bool {
 	return count > 0
 }
 
-func (db *DB) Insert(fileRef *FileRef, data []byte) error {
+func (db *DB) GetFileRef(filename string) (*FileRef, error) {
+	var ref FileRef
+
+	err := db.QueryRowx(`
+		SELECT
+			id,
+			filename,
+			md5,
+			modified_at
+		FROM
+			documents
+		WHERE
+			filename = ?
+	`, filename).StructScan(&ref)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &ref, nil
+}
+
+func (db *DB) Upsert(fileRef *FileRef, data []byte) error {
 	if fileRef.Filename == "" {
 		return errors.New("filename is blank")
 	}
@@ -74,48 +96,88 @@ func (db *DB) Insert(fileRef *FileRef, data []byte) error {
 		return errors.New("modifiedAt is not defined")
 	}
 
-	err := db.QueryRow(`
-		SELECT 1 FROM documents
-		WHERE
-			filename = ?
-		AND
-			md5 = ?
-		AND
-			modified_at = ?
-	`, fileRef.Filename, fileRef.MD5, fileRef.ModifiedAt).Scan()
-
-	if err == sql.ErrNoRows {
-		// Insert
-		var (
-			res   sql.Result
-			docId int64
-		)
-
-		res, err = db.NamedExec(`
-			INSERT INTO documents
-				(filename, md5, modified_at)
-			VALUES
-				(:filename, :md5, :modified_at)
-			ON CONFLICT(filename) DO NOTHING;
-		`, fileRef)
-
-		if err != nil {
-			return err
-		}
-
-		docId, err = res.LastInsertId()
-
-		if err != nil {
-			return err
-		}
-
-		_, err = db.Exec(`
-			INSERT INTO content_index
-				(document_id, filename, text)
-			VALUES
-				(?, , ?);
-		`, docId, fileRef.Filename, string(data))
+	if db.IsUnmodified(fileRef) {
+		return nil
 	}
 
-	return err
+	oldRef, err := db.GetFileRef(fileRef.Filename)
+
+	if err != nil {
+		switch err {
+		case sql.ErrNoRows:
+			return db.Insert(fileRef, data)
+		default:
+			panic(err)
+		}
+	} else {
+		return db.Update(oldRef, fileRef, data)
+	}
+}
+
+func (db *DB) Insert(fileRef *FileRef, data []byte) error {
+	// Insert
+	var (
+		res   sql.Result
+		docId int64
+	)
+
+	res, err := db.NamedExec(`
+		INSERT INTO documents
+			(filename, md5, modified_at)
+		VALUES
+			(:filename, :md5, :modified_at)
+		ON CONFLICT(filename) DO NOTHING;
+	`, fileRef)
+
+	if err != nil {
+		return err
+	}
+
+	docId, err = res.LastInsertId()
+
+	if err != nil {
+		return err
+	}
+
+	fileRef.DocumentID = docId
+
+	_, err = db.Exec(`
+		INSERT INTO content_index
+			(document_id, filename, text)
+		VALUES
+			(?, ?, ?);
+	`, fileRef.DocumentID, fileRef.Filename, string(data))
+
+	return errors.WithStack(err)
+}
+
+func (db *DB) Update(oldRef, newRef *FileRef, data []byte) error {
+	newRef.Filename = oldRef.Filename
+
+	res, err := db.NamedExec(`
+		UPDATE documents
+		SET
+			md5         = :md5,
+			modified_at = :modified_at
+		WHERE
+			filename = :filename
+	`, newRef)
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	if count, _ := res.RowsAffected(); count != 1 {
+		return errors.New("update did not change any rows")
+	}
+
+	_, err = db.Exec(`
+		UPDATE content_index
+		SET
+			text        = ?
+		WHERE
+			document_id = ?
+	`, string(data), oldRef.DocumentID)
+
+	return errors.WithStack(err)
 }
