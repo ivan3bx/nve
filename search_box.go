@@ -34,11 +34,14 @@ func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
 		notes.Search(text)
 	})
 
-	res.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
+	res.SetDoneFunc(func(key tcell.Key) {
+		switch key {
+		case tcell.KeyEnter:
+			notes.Search(res.GetText())
+		case tcell.KeyEsc:
+			notes.Search("")
 			res.SetText("")
 		}
-		return event
 	})
 
 	return &res
@@ -47,7 +50,7 @@ func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
 // InputHandler overrides default handling to switch focus away from search box when necessary.
 func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return sb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-		if event.Key() == tcell.KeyEnter {
+		if event.Key() == tcell.KeyDown || event.Key() == tcell.KeyEnter {
 			setFocus(sb.listView)
 		} else {
 			if handler := sb.InputField.InputHandler(); handler != nil {

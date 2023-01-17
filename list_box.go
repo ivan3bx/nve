@@ -40,8 +40,12 @@ func NewListBox(contentView *ContentBox) *ListBox {
 }
 
 func (b *ListBox) SearchResultsUpdate(notes *Notes) {
-	// TODO: remove items not present in Notes search results
-	// fmt.Printf("Searched for '%s'\n", notes.Query)
+	lastResult := notes.LastSearchResults
+	b.Clear()
+	for _, result := range lastResult {
+		// TODO: 'nil' should be function that updates the content box
+		b.AddItem(result.Filename, "", 0, nil)
+	}
 }
 
 // InputHandler overrides default handling to switch focus away from search box when necessary.
