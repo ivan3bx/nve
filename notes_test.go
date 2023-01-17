@@ -11,7 +11,7 @@ var notes *Notes
 func init() {
 	notes = NewNotes(NotesConfig{
 		Filepath: "./test_data",
-		DBPath:   "./nve_test.db", // generateTempDBPath(),
+		DBPath:   generateTempDBPath(),
 	})
 }
 
@@ -24,6 +24,21 @@ func TestSearch(t *testing.T) {
 		input    string
 		expected []string
 	}{
+		{
+			name:     "handles empty input",
+			input:    "",
+			expected: []string{},
+		},
+		{
+			name:     "handles quote characters",
+			input:    "\"",
+			expected: []string{},
+		},
+		{
+			name:     "locates no files",
+			input:    "nothing-matches-this-string~~",
+			expected: []string{},
+		},
 		{
 			name:     "locates files by partial name match",
 			input:    "apple",

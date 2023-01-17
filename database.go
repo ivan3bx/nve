@@ -123,6 +123,7 @@ func (db *DB) Search(text string) ([]*FileRef, error) {
 		err error
 	)
 
+	term := ftsMatchString(text)
 	err = db.Select(&res, `
 		SELECT
 			id, docs.filename, docs.md5, docs.modified_at
@@ -134,7 +135,7 @@ func (db *DB) Search(text string) ([]*FileRef, error) {
 			cti.document_id = docs.id
 		WHERE
 			content_index match (?)
-	`, fmt.Sprintf("filename:%s* OR text:%s*", strings.ReplaceAll(text, " ", "* "), text))
+	`, fmt.Sprintf("filename:%s OR text:%s", term, term))
 
 	if err != nil {
 		return nil, err
@@ -209,4 +210,23 @@ func (db *DB) Update(oldRef, newRef *FileRef, data []byte) error {
 	`, string(data), oldRef.DocumentID)
 
 	return errors.WithStack(err)
+}
+
+// ftsMatchString converts an expression into a wildcard match.
+// Each term is quoted, so as to accept non-word characters
+// without blowing up SQLite's query parser.
+//
+// Examples:
+//
+//	"foo"     => '"foo"*'
+//	"foo bar" => '"foo"* "bar"*'
+//	"foo-bar" => '"foo-bar"*'
+func ftsMatchString(text string) string {
+	sb := []string{}
+
+	for _, part := range strings.Split(text, " ") {
+		sb = append(sb, fmt.Sprintf(`"%s"*`, part))
+	}
+
+	return strings.Join(sb, " ")
 }

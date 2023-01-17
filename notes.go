@@ -51,6 +51,7 @@ func (n *Notes) Search(text string) []string {
 		panic(err)
 	}
 
+	res = make([]string, 0)
 	for _, file := range files {
 		res = append(res, file.Filename)
 	}
