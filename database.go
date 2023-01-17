@@ -3,6 +3,7 @@ package nve
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -114,6 +115,32 @@ func (db *DB) Upsert(fileRef *FileRef, data []byte) error {
 	} else {
 		return db.Update(oldRef, fileRef, data)
 	}
+}
+
+func (db *DB) Search(text string) ([]*FileRef, error) {
+	var (
+		res []*FileRef
+		err error
+	)
+
+	err = db.Select(&res, `
+		SELECT
+			id, docs.filename, docs.md5, docs.modified_at
+		FROM
+			documents docs
+		INNER JOIN
+			content_index cti
+		ON
+			cti.document_id = docs.id
+		WHERE
+			content_index match (?)
+	`, fmt.Sprintf("filename:%s* OR text:%s*", strings.ReplaceAll(text, " ", "* "), text))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func (db *DB) Insert(fileRef *FileRef, data []byte) error {

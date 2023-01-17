@@ -6,16 +6,30 @@ import (
 	_ "github.com/mattn/go-sqlite3" // sqlite driver
 )
 
+type NotesConfig struct {
+	Filepath string
+	DBPath   string
+}
+
 type Notes struct {
-	Query     string
+	config    NotesConfig
 	db        *DB
 	observers []Observer
 }
 
-var DBNAME = "nve.db"
+var DefaultDBPath = "./nve.db"
 
-func NewNotes() *Notes {
-	notes := &Notes{db: MustOpen(DBNAME)}
+func NewNotes(config NotesConfig) *Notes {
+	if config.Filepath == "" {
+		config.Filepath, _ = os.Getwd()
+	}
+
+	if config.DBPath == "" {
+		config.DBPath = DefaultDBPath
+	}
+
+	notes := &Notes{config: config}
+	notes.db = MustOpen(config.DBPath)
 
 	if err := notes.refresh(); err != nil {
 		panic(err)
@@ -24,12 +38,28 @@ func NewNotes() *Notes {
 	return notes
 }
 
-func (n *Notes) Search(text string) {
+// Search returns a set of filepaths matching the given search string.
+func (n *Notes) Search(text string) []string {
+	var (
+		res []string
+		err error
+	)
 	// 1. perform the search on local FS
-	n.Query = text
+	files, err := n.db.Search(text)
+
+	if err != nil {
+		panic(err)
+	}
+
+	for _, file := range files {
+		res = append(res, file.Filename)
+	}
 
 	// 2. update results (save in field)
 	n.Notify()
+
+	// 3. return results
+	return res
 }
 
 func (n *Notes) RegisterObservers(obs ...Observer) {
@@ -49,7 +79,7 @@ func (n *Notes) Notify() {
 func (n *Notes) refresh() error {
 	var db = n.db
 
-	for _, file := range scanCurrentDirectory() {
+	for _, file := range scanDirectory(n.config.Filepath) {
 		md5, _ := calculateMD5(file)
 		stats, _ := os.Stat(file)
 

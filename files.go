@@ -24,16 +24,10 @@ type FileRef struct {
 	ModifiedAt time.Time `db:"modified_at"`
 }
 
-func scanCurrentDirectory() []string {
+func scanDirectory(dirname string) []string {
 	var files []string
 
-	cwd, err := os.Getwd()
-
-	if err != nil {
-		panic(err)
-	}
-
-	err = filepath.Walk(cwd, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(dirname, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			panic(err)
 		}

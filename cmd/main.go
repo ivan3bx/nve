@@ -9,7 +9,9 @@ import (
 func main() {
 	var (
 		app   = tview.NewApplication()
-		notes = nve.NewNotes()
+		notes = nve.NewNotes(nve.NotesConfig{
+			Filepath: "../nve_temp",
+		})
 
 		// View hierarchy
 		contentBox = nve.NewContentBox()

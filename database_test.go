@@ -14,14 +14,20 @@ func withNewDB(runtest func(db *DB)) {
 	})
 }
 
-func withNewDBPath(runtest func(db *DB, dbPath string)) {
+func generateTempDBPath() string {
 	tempFile, err := os.CreateTemp(os.TempDir(), "*.db")
+
 	if err != nil {
 		panic(err)
 	}
-	dbPath := tempFile.Name()
-	os.Remove(dbPath)
 
+	file := tempFile.Name()
+	os.Remove(file)
+	return file
+}
+
+func withNewDBPath(runtest func(db *DB, dbPath string)) {
+	dbPath := generateTempDBPath()
 	db := MustOpen(dbPath)
 	defer func() {
 		if db != nil {
