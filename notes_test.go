@@ -34,6 +34,34 @@ func TestSearch(t *testing.T) {
 			input:    "app zoo",
 			expected: []string{"test_data/apples in zoo.md"},
 		},
+		{
+			name:     "locates files by content match",
+			input:    "new york",
+			expected: []string{"test_data/apples in zoo.md"},
+		},
+		{
+			name:     "locates files by partial content match",
+			input:    "yor",
+			expected: []string{"test_data/apples in zoo.md"},
+		},
+		{
+			name:     "locates files by case-insensitive content match",
+			input:    "YOR",
+			expected: []string{"test_data/apples in zoo.md"},
+		},
+		// {
+		// 	name:  "orders files by filename first",
+		// 	input: "zoo",
+		// 	expected: []string{
+		// 		// matching filename
+		// 		"test_data/apples in zoo.md",
+		// 		"test_data/bananas_in_zoo.md",
+		// 		"test_data/zebra in zoo.md",
+
+		// 		// matching content
+		// 		"test_data/cats.md",
+		// 	},
+		// },
 	}
 
 	for _, tc := range testCases {
