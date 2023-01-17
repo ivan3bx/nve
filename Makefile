@@ -22,7 +22,7 @@ build-local:
 
 .PHONY: test
 test:
-	go test -v ./...
+	go test ./... --tags=fts5 --count=1
 
 .PHONY: release-local
 release-local:

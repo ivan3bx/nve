@@ -10,7 +10,7 @@ func main() {
 	var (
 		app   = tview.NewApplication()
 		notes = nve.NewNotes(nve.NotesConfig{
-			Filepath: "../nve_temp",
+			Filepath: "./",
 		})
 
 		// View hierarchy

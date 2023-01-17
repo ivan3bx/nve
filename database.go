@@ -13,6 +13,11 @@ type DB struct {
 	*sqlx.DB
 }
 
+type SearchResult struct {
+	*FileRef
+	Snippet string `db:"snippet"`
+}
+
 func MustOpen(file string) *DB {
 	db := sqlx.MustOpen("sqlite3", fmt.Sprintf("file:%s?_fk=true&loc=auto", file))
 
@@ -117,16 +122,19 @@ func (db *DB) Upsert(fileRef *FileRef, data []byte) error {
 	}
 }
 
-func (db *DB) Search(text string) ([]*FileRef, error) {
+// Search performs FTS on filename and text using default NEAR semantics
+// and includes snippet text up to 10 'word' tokens in length.
+func (db *DB) Search(text string) ([]*SearchResult, error) {
 	var (
-		res []*FileRef
+		res []*SearchResult
 		err error
 	)
 
 	term := ftsMatchString(text)
 	err = db.Select(&res, `
 		SELECT
-			id, docs.filename, docs.md5, docs.modified_at
+			docs.id, docs.filename, docs.md5, docs.modified_at,
+			snippet(content_index, 2, "**", "**", '...', 10) as snippet
 		FROM
 			documents docs
 		INNER JOIN
@@ -135,7 +143,7 @@ func (db *DB) Search(text string) ([]*FileRef, error) {
 			cti.document_id = docs.id
 		WHERE
 			content_index match (?)
-	`, fmt.Sprintf("filename:%s OR text:%s", term, term))
+	`, fmt.Sprintf("filename:NEAR(%s) OR text:NEAR(%s)", term, term))
 
 	if err != nil {
 		return nil, err

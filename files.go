@@ -24,12 +24,12 @@ type FileRef struct {
 	ModifiedAt time.Time `db:"modified_at"`
 }
 
-func scanDirectory(dirname string) []string {
+func scanDirectory(dirname string) ([]string, error) {
 	var files []string
 
 	err := filepath.Walk(dirname, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
-			panic(err)
+			return err
 		}
 
 		if !info.IsDir() && SUPPORTED_FILETYPES[filepath.Ext(path)] {
@@ -40,10 +40,10 @@ func scanDirectory(dirname string) []string {
 	})
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return files
+	return files, nil
 }
 
 func calculateMD5(path string) (string, error) {

@@ -12,6 +12,8 @@ type NotesConfig struct {
 }
 
 type Notes struct {
+	LastSearchResults []*SearchResult
+
 	config    NotesConfig
 	db        *DB
 	observers []Observer
@@ -39,28 +41,28 @@ func NewNotes(config NotesConfig) *Notes {
 }
 
 // Search returns a set of filepaths matching the given search string.
-func (n *Notes) Search(text string) []string {
+func (n *Notes) Search(text string) ([]string, error) {
 	var (
 		res []string
 		err error
 	)
-	// 1. perform the search on local FS
-	files, err := n.db.Search(text)
 
-	if err != nil {
-		panic(err)
-	}
-
-	res = make([]string, 0)
-	for _, file := range files {
-		res = append(res, file.Filename)
+	// 1. perform the search
+	if n.LastSearchResults, err = n.db.Search(text); err != nil {
+		return nil, err
 	}
 
 	// 2. update results (save in field)
 	n.Notify()
 
 	// 3. return results
-	return res
+	res = make([]string, 0)
+
+	for _, file := range n.LastSearchResults {
+		res = append(res, file.Filename)
+	}
+
+	return res, nil
 }
 
 func (n *Notes) RegisterObservers(obs ...Observer) {
@@ -80,7 +82,13 @@ func (n *Notes) Notify() {
 func (n *Notes) refresh() error {
 	var db = n.db
 
-	for _, file := range scanDirectory(n.config.Filepath) {
+	files, err := scanDirectory(n.config.Filepath)
+
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
 		md5, _ := calculateMD5(file)
 		stats, _ := os.Stat(file)
 
