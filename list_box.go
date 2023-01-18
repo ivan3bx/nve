@@ -10,7 +10,7 @@ type ListBox struct {
 	contentView *ContentBox
 }
 
-func NewListBox(contentView *ContentBox) *ListBox {
+func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 	box := ListBox{
 		List:        tview.NewList(),
 		contentView: contentView,
@@ -32,18 +32,40 @@ func NewListBox(contentView *ContentBox) *ListBox {
 		SetBorderPadding(0, 0, 1, 1).
 		SetTitleAlign(tview.AlignLeft)
 
-	// sample data
-	box.AddItem("Main text goes here", "", 0, nil)
-	box.AddItem("Second item here", "", 0, nil)
+	box.SetSelectedFocusOnly(true)
+
+	box.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		if (!box.HasFocus() && notes.LastQuery == "") || len(notes.LastSearchResults) == 0 {
+			box.contentView.Clear()
+		} else {
+			result := notes.LastSearchResults[index]
+			box.contentView.SetFile(result.FileRef)
+		}
+	})
+
+	box.SetFocusFunc(func() {
+		if notes.LastQuery == "" {
+			result := notes.LastSearchResults[box.GetCurrentItem()]
+			box.contentView.SetFile(result.FileRef)
+		}
+	})
 
 	return &box
 }
 
 func (b *ListBox) SearchResultsUpdate(notes *Notes) {
+	emptyQuery := notes.LastQuery == ""
 	lastResult := notes.LastSearchResults
+
 	b.Clear()
+
+	b.SetSelectedFocusOnly(emptyQuery)
+
+	if len(lastResult) == 0 {
+		b.contentView.Clear()
+	}
+
 	for _, result := range lastResult {
-		// TODO: 'nil' should be function that updates the content box
 		b.AddItem(result.Filename, "", 0, nil)
 	}
 }

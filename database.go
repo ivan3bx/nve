@@ -115,11 +115,41 @@ func (db *DB) Upsert(fileRef *FileRef, data []byte) error {
 		case sql.ErrNoRows:
 			return db.Insert(fileRef, data)
 		default:
-			panic(err)
+			logger.Printf("DB.Upsert: %v\n", err)
+			return errors.WithStack(err)
 		}
 	} else {
 		return db.Update(oldRef, fileRef, data)
 	}
+}
+
+func (db *DB) Recent(limit int) ([]*SearchResult, error) {
+	var (
+		res []*SearchResult
+		err error
+	)
+
+	err = db.Select(&res, `
+		SELECT
+			docs.id, docs.filename, docs.md5, docs.modified_at,
+			substr(cti.text, 0, 10) as snippet
+		FROM
+			documents docs
+		INNER JOIN
+			content_index cti
+		ON
+			cti.document_id = docs.id
+		ORDER BY
+			docs.modified_at desc
+		LIMIT ?
+	`, limit)
+
+	if err != nil {
+		logger.Printf("DB.Recent: %v\n", err)
+		return nil, errors.WithStack(err)
+	}
+
+	return res, nil
 }
 
 // Search performs FTS on filename and text using default NEAR semantics
@@ -146,7 +176,8 @@ func (db *DB) Search(text string) ([]*SearchResult, error) {
 	`, fmt.Sprintf("filename:NEAR(%s) OR text:NEAR(%s)", term, term))
 
 	if err != nil {
-		return nil, err
+		logger.Printf("DB.Search: %v\n", err)
+		return nil, errors.WithStack(err)
 	}
 
 	return res, nil
@@ -168,12 +199,14 @@ func (db *DB) Insert(fileRef *FileRef, data []byte) error {
 	`, fileRef)
 
 	if err != nil {
+		logger.Printf("DB.Insert: %v\n", err)
 		return err
 	}
 
 	docId, err = res.LastInsertId()
 
 	if err != nil {
+		logger.Printf("DB.Recent: %v\n", err)
 		return err
 	}
 
@@ -202,6 +235,7 @@ func (db *DB) Update(oldRef, newRef *FileRef, data []byte) error {
 	`, newRef)
 
 	if err != nil {
+		logger.Printf("DB.Update: %v\n", err)
 		return errors.WithStack(err)
 	}
 

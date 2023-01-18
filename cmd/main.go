@@ -15,11 +15,12 @@ func main() {
 
 		// View hierarchy
 		contentBox = nve.NewContentBox()
-		listBox    = nve.NewListBox(contentBox)
+		listBox    = nve.NewListBox(contentBox, notes)
 		searchBox  = nve.NewSearchBox(listBox, notes)
 	)
 
 	notes.RegisterObservers(contentBox, listBox)
+	notes.Notify()
 
 	// global input events
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {

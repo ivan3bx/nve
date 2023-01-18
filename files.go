@@ -24,6 +24,16 @@ type FileRef struct {
 	ModifiedAt time.Time `db:"modified_at"`
 }
 
+func GetContent(filename string) string {
+	bytes, err := os.ReadFile(filename)
+
+	if err != nil {
+		logger.Printf("GetContent: %v", err)
+	}
+
+	return string(bytes)
+}
+
 func scanDirectory(dirname string) ([]string, error) {
 	var files []string
 

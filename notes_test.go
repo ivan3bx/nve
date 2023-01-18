@@ -1,6 +1,7 @@
 package nve
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,9 +26,15 @@ func TestSearch(t *testing.T) {
 		expected []string
 	}{
 		{
-			name:     "handles empty input",
-			input:    "",
-			expected: []string{},
+			name:  "handles empty input",
+			input: "",
+			expected: []string{
+				"test_data/apples in zoo.md",
+				"test_data/bananas_in_zoo.md",
+				"test_data/cats.md",
+				"test_data/nested/cucumbers.md",
+				"test_data/zebra in zoo.md",
+			},
 		},
 		{
 			name:     "handles quote characters",
@@ -64,25 +71,16 @@ func TestSearch(t *testing.T) {
 			input:    "YOR",
 			expected: []string{"test_data/apples in zoo.md"},
 		},
-		// {
-		// 	name:  "orders files by filename first",
-		// 	input: "zoo",
-		// 	expected: []string{
-		// 		// matching filename
-		// 		"test_data/apples in zoo.md",
-		// 		"test_data/bananas_in_zoo.md",
-		// 		"test_data/zebra in zoo.md",
-
-		// 		// matching content
-		// 		"test_data/cats.md",
-		// 	},
-		// },
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			results, err := notes.Search(tc.input)
 			assert.NoError(t, err)
+
+			// sort both arrays before assertion
+			sort.Strings(tc.expected)
+			sort.Strings(results)
 			assert.Equal(t, tc.expected, results)
 		})
 	}

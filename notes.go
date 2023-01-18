@@ -1,10 +1,13 @@
 package nve
 
 import (
+	"log"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3" // sqlite driver
 )
+
+var logger = log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
 
 type NotesConfig struct {
 	Filepath string
@@ -12,6 +15,7 @@ type NotesConfig struct {
 }
 
 type Notes struct {
+	LastQuery         string
 	LastSearchResults []*SearchResult
 
 	config    NotesConfig
@@ -30,10 +34,12 @@ func NewNotes(config NotesConfig) *Notes {
 		config.DBPath = DefaultDBPath
 	}
 
-	notes := &Notes{config: config}
-	notes.db = MustOpen(config.DBPath)
+	notes := &Notes{
+		config: config,
+		db:     MustOpen(config.DBPath),
+	}
 
-	if err := notes.refresh(); err != nil {
+	if err := notes.Refresh(); err != nil {
 		panic(err)
 	}
 
@@ -43,20 +49,30 @@ func NewNotes(config NotesConfig) *Notes {
 // Search returns a set of filepaths matching the given search string.
 func (n *Notes) Search(text string) ([]string, error) {
 	var (
-		res []string
-		err error
+		searchResults []*SearchResult
+		err           error
 	)
 
-	// 1. perform the search
-	if n.LastSearchResults, err = n.db.Search(text); err != nil {
+	n.LastQuery = text
+
+	if text == "" {
+		searchResults, err = n.db.Recent(10)
+	} else {
+		searchResults, err = n.db.Search(text)
+	}
+
+	if err != nil {
 		return nil, err
 	}
+
+	// 1. perform the search
+	n.LastSearchResults = searchResults
 
 	// 2. update results (save in field)
 	n.Notify()
 
 	// 3. return results
-	res = make([]string, 0)
+	res := make([]string, 0)
 
 	for _, file := range n.LastSearchResults {
 		res = append(res, file.Filename)
@@ -79,7 +95,7 @@ func (n *Notes) Notify() {
 	}
 }
 
-func (n *Notes) refresh() error {
+func (n *Notes) Refresh() error {
 	var db = n.db
 
 	files, err := scanDirectory(n.config.Filepath)
@@ -113,5 +129,6 @@ func (n *Notes) refresh() error {
 		}
 	}
 
+	n.Search("")
 	return nil
 }
