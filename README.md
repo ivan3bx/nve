@@ -15,5 +15,7 @@ The goal is to point 'nve' to a directory of plain-text files, and quickly searc
 - Monitor FS changes to incrementally update DB
 - Display snippet in search results
 - Support renaming of notes (modal)
+- Colorize matching search term in content
+- Syntax highlighting for Markdown files
 
 <image src="https://user-images.githubusercontent.com/179345/212459798-29c7c2e1-71fc-4323-9da4-6cdcff09f598.png" width="620"/>
