@@ -2,85 +2,45 @@ package main
 
 import (
 	"github.com/gdamore/tcell/v2"
+	"github.com/ivan3bx/nve"
 	"github.com/rivo/tview"
 )
 
-func searchBox() *tview.TextArea {
-	textArea := tview.NewTextArea().
-		SetPlaceholder(">").
-		SetSelectedStyle(
-			tcell.StyleDefault.
-				Background(tcell.ColorDarkSlateGray),
-		)
-
-	textArea.SetBorder(true).
-		SetTitle("Search Box").
-		SetBackgroundColor(tcell.ColorBlack).
-		SetTitleColor(tcell.ColorYellow).
-		SetBorderStyle(tcell.StyleDefault.Dim(true)).
-		SetBorderPadding(0, 0, 1, 1).
-		SetTitleAlign(tview.AlignLeft)
-
-	textArea.SetText("Main text goes here", true)
-
-	return textArea
-}
-
-func listBox() *tview.List {
-	listView := tview.NewList().
-		ShowSecondaryText(false).
-		SetWrapAround(false).
-		SetHighlightFullLine(true).
-		SetSelectedStyle(
-			tcell.StyleDefault.
-				Background(tcell.ColorDarkBlue).
-				Foreground(tcell.ColorLightSkyBlue),
-		)
-
-	listView.SetBorder(true).
-		SetTitle("List Box").
-		SetTitleColor(tcell.ColorOrange).
-		SetBorderStyle(tcell.StyleDefault.Dim(true)).
-		SetBorderPadding(0, 0, 1, 1).
-		SetTitleAlign(tview.AlignLeft)
-
-	// sample data
-	listView.AddItem("Main text goes here", "", 0, nil)
-	listView.AddItem("Second item here", "", 0, nil)
-
-	return listView
-}
-
-func contentBox() *tview.TextArea {
-	textArea := tview.NewTextArea()
-
-	textArea.SetBorder(true).
-		SetTitle("Content").
-		SetTitleColor(tcell.ColorDarkOrange).
-		SetBorderStyle(tcell.StyleDefault.Dim(true)).
-		SetBorderPadding(1, 0, 1, 1).
-		SetTitleAlign(tview.AlignLeft)
-
-	textArea.SetText("this could be lots of content\n\n# Separated by other stuff.\n\n* one item\n* two item\n", true)
-	return textArea
-}
-
 func main() {
 	var (
-		searchBox  = searchBox()
-		listBox    = listBox()
-		contentBox = contentBox()
+		app   = tview.NewApplication()
+		notes = nve.NewNotes(nve.NotesConfig{
+			Filepath: "./",
+		})
+
+		// View hierarchy
+		contentBox = nve.NewContentBox()
+		listBox    = nve.NewListBox(contentBox, notes)
+		searchBox  = nve.NewSearchBox(listBox, notes)
 	)
 
-	app := tview.NewApplication()
+	notes.RegisterObservers(contentBox, listBox)
+	notes.Notify()
+
+	// global input events
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEsc {
-			app.SetFocus(searchBox)
-			searchBox.Select(0, searchBox.GetTextLength())
+		switch event.Key() {
+		case tcell.KeyTab:
+			if searchBox.HasFocus() {
+				app.SetFocus(listBox)
+			} else if listBox.HasFocus() {
+				app.SetFocus(contentBox)
+			} else {
+				break
+			}
+			return &tcell.EventKey{}
+		case tcell.KeyEscape:
+			if contentBox.HasFocus() {
+				app.SetFocus(searchBox)
+				return &tcell.EventKey{}
+			}
 		}
-		if event.Key() == tcell.KeyEnter && searchBox.HasFocus() {
-			app.SetFocus(listBox)
-		}
+
 		return event
 	})
 
