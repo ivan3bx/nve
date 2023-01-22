@@ -7,13 +7,15 @@ import (
 
 type SearchBox struct {
 	*tview.InputField
-	listView *ListBox
+	listView    *ListBox
+	contentView *ContentBox
 }
 
-func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
+func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *SearchBox {
 	res := SearchBox{
-		InputField: tview.NewInputField(),
-		listView:   listView,
+		InputField:  tview.NewInputField(),
+		listView:    listView,
+		contentView: contentView,
 	}
 
 	// input field attributes
@@ -50,7 +52,9 @@ func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
 // InputHandler overrides default handling to switch focus away from search box when necessary.
 func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return sb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-		if event.Key() == tcell.KeyDown || event.Key() == tcell.KeyEnter {
+		if event.Key() == tcell.KeyEnter {
+			setFocus(sb.contentView)
+		} else if event.Key() == tcell.KeyDown {
 			setFocus(sb.listView)
 		} else {
 			if handler := sb.InputField.InputHandler(); handler != nil {
