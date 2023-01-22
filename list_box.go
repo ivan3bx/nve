@@ -1,6 +1,7 @@
 package nve
 
 import (
+	"math"
 	"path/filepath"
 	"strings"
 
@@ -68,8 +69,30 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 		b.contentView.Clear()
 	}
 
-	for _, result := range lastResult {
-		b.AddItem(strings.TrimSuffix(filepath.Base(result.Filename), filepath.Ext(result.Filename)), "", 0, nil)
+	selectedIndex := -1
+
+	for index, result := range lastResult {
+		displayName := strings.TrimSuffix(filepath.Base(result.Filename), filepath.Ext(result.Filename))
+		b.AddItem(displayName, "", 0, nil)
+
+		if strings.HasPrefix(displayName, notes.LastQuery) {
+			selectedIndex = index
+		}
+	}
+
+	_, _, _, height := b.GetInnerRect()
+
+	if selectedIndex >= 0 {
+		// highlights row with exact prefix match to search query.
+		b.SetCurrentItem(selectedIndex)
+
+		// scroll to view; use height of list box
+		b.SetOffset(int(math.Max(float64(selectedIndex-height+1), 0)), 0)
+	} else {
+		// highlight any selected row if not in visible rect
+		if !b.InRect(b.GetCurrentItem(), 0) {
+			b.SetOffset(b.GetCurrentItem(), 0)
+		}
 	}
 }
 

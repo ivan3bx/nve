@@ -54,8 +54,14 @@ func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 	return sb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 		if event.Key() == tcell.KeyEnter {
 			setFocus(sb.contentView)
-		} else if event.Key() == tcell.KeyDown {
-			setFocus(sb.listView)
+		} else if event.Key() == tcell.KeyDown || event.Key() == tcell.KeyCtrlN {
+			if handler := sb.listView.InputHandler(); handler != nil {
+				handler(tcell.NewEventKey(tcell.KeyDown, event.Rune(), event.Modifiers()), setFocus)
+			}
+		} else if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyCtrlP {
+			if handler := sb.listView.InputHandler(); handler != nil {
+				handler(tcell.NewEventKey(tcell.KeyUp, event.Rune(), event.Modifiers()), setFocus)
+			}
 		} else {
 			if handler := sb.InputField.InputHandler(); handler != nil {
 				handler(event, setFocus)

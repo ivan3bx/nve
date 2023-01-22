@@ -30,6 +30,12 @@ func NewContentBox() *ContentBox {
 		SetBorderPadding(1, 0, 1, 1).
 		SetTitleAlign(tview.AlignLeft)
 
+	textArea.SetFocusFunc(func() {
+		// ignore edits if there is no current file
+		if textArea.currentFile == nil {
+			textArea.Blur()
+		}
+	})
 	return &textArea
 }
 
