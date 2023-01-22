@@ -1,6 +1,9 @@
 package nve
 
 import (
+	"path/filepath"
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -66,7 +69,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	}
 
 	for _, result := range lastResult {
-		b.AddItem(result.Filename, "", 0, nil)
+		b.AddItem(strings.TrimSuffix(filepath.Base(result.Filename), filepath.Ext(result.Filename)), "", 0, nil)
 	}
 }
 
