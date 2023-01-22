@@ -6,14 +6,15 @@ The goal is to point 'nve' to a directory of plain-text files, and quickly searc
 
 ## Current Status
 
-- 2023/01 - Navigation, search and viewing.
+- 2023/01/16 - Navigation, search and viewing.
+- 2023/02/22 - Saving, creating & displaying snippets
 
 ## TODO
 
-- Saving edits
-- Creating new notes from search box
+- ~Saving edits~
+- ~Creating new notes from search box~
+- ~Display snippet in search results~
 - Monitor FS changes to incrementally update DB
-- Display snippet in search results
 - Support renaming of notes (modal)
 - Colorize matching search term in content
 - Syntax highlighting for Markdown files
