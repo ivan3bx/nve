@@ -2,7 +2,6 @@ package nve
 
 import (
 	"math"
-	"path/filepath"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -72,7 +71,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	selectedIndex := -1
 
 	for index, result := range lastResult {
-		displayName := strings.TrimSuffix(filepath.Base(result.Filename), filepath.Ext(result.Filename))
+		displayName := result.DisplayName()
 		b.AddItem(displayName, "", 0, nil)
 
 		if strings.HasPrefix(displayName, notes.LastQuery) {

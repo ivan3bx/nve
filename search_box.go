@@ -1,6 +1,8 @@
 package nve
 
 import (
+	"log"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -39,10 +41,17 @@ func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *Sea
 	res.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
-			notes.Search(res.GetText())
-		case tcell.KeyEsc:
-			notes.Search("")
-			res.SetText("")
+			if len(notes.LastSearchResults) == 0 {
+				newNote, err := notes.CreateNote(res.GetText())
+
+				if err != nil {
+					log.Println("Error creating new note")
+					break
+				}
+
+				log.Println("Searching for", newNote.DisplayName())
+				notes.Search(newNote.DisplayName())
+			}
 		}
 	})
 
@@ -62,10 +71,10 @@ func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			if handler := sb.listView.InputHandler(); handler != nil {
 				handler(tcell.NewEventKey(tcell.KeyUp, event.Rune(), event.Modifiers()), setFocus)
 			}
-		} else {
-			if handler := sb.InputField.InputHandler(); handler != nil {
-				handler(event, setFocus)
-			}
+		}
+
+		if handler := sb.InputField.InputHandler(); handler != nil {
+			handler(event, setFocus)
 		}
 	})
 }

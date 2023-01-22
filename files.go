@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -22,6 +23,10 @@ type FileRef struct {
 	Filename   string    `db:"filename"`
 	MD5        string    `db:"md5"`
 	ModifiedAt time.Time `db:"modified_at"`
+}
+
+func (f *FileRef) DisplayName() string {
+	return strings.TrimSuffix(filepath.Base(f.Filename), filepath.Ext(f.Filename))
 }
 
 func GetContent(filename string) string {
