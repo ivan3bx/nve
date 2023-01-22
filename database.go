@@ -132,7 +132,7 @@ func (db *DB) Recent(limit int) ([]*SearchResult, error) {
 	err = db.Select(&res, `
 		SELECT
 			docs.id, docs.filename, docs.md5, docs.modified_at,
-			substr(cti.text, 0, 10) as snippet
+			substr(cti.text, 0, 120) as snippet
 		FROM
 			documents docs
 		INNER JOIN

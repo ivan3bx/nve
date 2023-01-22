@@ -1,6 +1,7 @@
 package nve
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -72,9 +73,16 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 
 	for index, result := range lastResult {
 		displayName := result.DisplayName()
-		b.AddItem(displayName, "", 0, nil)
+		var formattedName string
+		if len(displayName) > 14 {
+			formattedName = fmt.Sprintf("%-20.20s..", displayName)
+		} else {
+			formattedName = fmt.Sprintf("%-22.22s", displayName)
+		}
 
-		if strings.HasPrefix(displayName, notes.LastQuery) {
+		b.AddItem(strings.Join([]string{formattedName, result.Snippet}, " : "), "", 0, nil)
+
+		if selectedIndex == -1 && strings.HasPrefix(displayName, notes.LastQuery) {
 			selectedIndex = index
 		}
 	}

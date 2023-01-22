@@ -58,7 +58,7 @@ func (n *Notes) Search(text string) ([]string, error) {
 	n.LastQuery = text
 
 	if text == "" {
-		searchResults, err = n.db.Recent(10)
+		searchResults, err = n.db.Recent(20)
 	} else {
 		searchResults, err = n.db.Search(text)
 	}

@@ -49,7 +49,6 @@ func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *Sea
 					break
 				}
 
-				log.Println("Searching for", newNote.DisplayName())
 				notes.Search(newNote.DisplayName())
 			}
 		}
