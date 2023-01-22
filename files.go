@@ -34,6 +34,10 @@ func GetContent(filename string) string {
 	return string(bytes)
 }
 
+func SaveContent(filename string, content string) error {
+	return os.WriteFile(filename, []byte(content), 0644)
+}
+
 func scanDirectory(dirname string) ([]string, error) {
 	var files []string
 

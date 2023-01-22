@@ -19,7 +19,7 @@ func main() {
 		searchBox  = nve.NewSearchBox(listBox, contentBox, notes)
 	)
 
-	notes.RegisterObservers(contentBox, listBox)
+	notes.RegisterObservers(listBox)
 	notes.Notify()
 
 	// global input events
