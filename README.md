@@ -11,9 +11,9 @@ The goal is to point 'nve' to a directory of plain-text files, and quickly searc
 
 ## TODO
 
-- [x] Saving edits
-- [x] Creating new notes from search box
-- [x] Display snippet in search results
+- [x] ✅ Saving edits
+- [x] ✅ Creating new notes from search box
+- [x] ✅ Display snippet in search results
 - [ ] Monitor FS changes to incrementally update DB
 - [ ] Support renaming of notes (modal)
 - [ ] Colorize matching search term in content
