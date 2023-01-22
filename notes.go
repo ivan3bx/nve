@@ -1,8 +1,10 @@
 package nve
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3" // sqlite driver
 )
@@ -56,7 +58,7 @@ func (n *Notes) Search(text string) ([]string, error) {
 	n.LastQuery = text
 
 	if text == "" {
-		searchResults, err = n.db.Recent(10)
+		searchResults, err = n.db.Recent(20)
 	} else {
 		searchResults, err = n.db.Search(text)
 	}
@@ -79,6 +81,39 @@ func (n *Notes) Search(text string) ([]string, error) {
 	}
 
 	return res, nil
+}
+
+func (n *Notes) CreateNote(name string) (*FileRef, error) {
+	path := filepath.Join(n.config.Filepath, fmt.Sprintf("%s.%s", name, "md"))
+	newFile, err := os.OpenFile(path, os.O_CREATE, 0644)
+
+	if err != nil {
+		return nil, err
+	}
+
+	md5, err := calculateMD5(path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	stat, err := newFile.Stat()
+
+	if err != nil {
+		return nil, err
+	}
+
+	fileRef := FileRef{
+		Filename:   newFile.Name(),
+		MD5:        md5,
+		ModifiedAt: stat.ModTime(),
+	}
+
+	if err := n.db.Insert(&fileRef, []byte{}); err != nil {
+		return nil, err
+	}
+
+	return &fileRef, nil
 }
 
 func (n *Notes) RegisterObservers(obs ...Observer) {

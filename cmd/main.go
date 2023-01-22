@@ -16,10 +16,10 @@ func main() {
 		// View hierarchy
 		contentBox = nve.NewContentBox()
 		listBox    = nve.NewListBox(contentBox, notes)
-		searchBox  = nve.NewSearchBox(listBox, notes)
+		searchBox  = nve.NewSearchBox(listBox, contentBox, notes)
 	)
 
-	notes.RegisterObservers(contentBox, listBox)
+	notes.RegisterObservers(listBox)
 	notes.Notify()
 
 	// global input events
@@ -35,7 +35,8 @@ func main() {
 			}
 			return &tcell.EventKey{}
 		case tcell.KeyEscape:
-			if contentBox.HasFocus() {
+			if !contentBox.HasFocus() {
+				listBox.SetCurrentItem(0)
 				app.SetFocus(searchBox)
 				return &tcell.EventKey{}
 			}

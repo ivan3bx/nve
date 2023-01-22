@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -24,6 +25,10 @@ type FileRef struct {
 	ModifiedAt time.Time `db:"modified_at"`
 }
 
+func (f *FileRef) DisplayName() string {
+	return strings.TrimSuffix(filepath.Base(f.Filename), filepath.Ext(f.Filename))
+}
+
 func GetContent(filename string) string {
 	bytes, err := os.ReadFile(filename)
 
@@ -32,6 +37,10 @@ func GetContent(filename string) string {
 	}
 
 	return string(bytes)
+}
+
+func SaveContent(filename string, content string) error {
+	return os.WriteFile(filename, []byte(content), 0644)
 }
 
 func scanDirectory(dirname string) ([]string, error) {

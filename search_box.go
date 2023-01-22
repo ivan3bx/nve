@@ -1,19 +1,23 @@
 package nve
 
 import (
+	"log"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 type SearchBox struct {
 	*tview.InputField
-	listView *ListBox
+	listView    *ListBox
+	contentView *ContentBox
 }
 
-func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
+func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *SearchBox {
 	res := SearchBox{
-		InputField: tview.NewInputField(),
-		listView:   listView,
+		InputField:  tview.NewInputField(),
+		listView:    listView,
+		contentView: contentView,
 	}
 
 	// input field attributes
@@ -37,10 +41,16 @@ func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
 	res.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
-			notes.Search(res.GetText())
-		case tcell.KeyEsc:
-			notes.Search("")
-			res.SetText("")
+			if len(notes.LastSearchResults) == 0 {
+				newNote, err := notes.CreateNote(res.GetText())
+
+				if err != nil {
+					log.Println("Error creating new note")
+					break
+				}
+
+				notes.Search(newNote.DisplayName())
+			}
 		}
 	})
 
@@ -50,12 +60,20 @@ func NewSearchBox(listView *ListBox, notes *Notes) *SearchBox {
 // InputHandler overrides default handling to switch focus away from search box when necessary.
 func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return sb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-		if event.Key() == tcell.KeyDown || event.Key() == tcell.KeyEnter {
-			setFocus(sb.listView)
-		} else {
-			if handler := sb.InputField.InputHandler(); handler != nil {
-				handler(event, setFocus)
+		if event.Key() == tcell.KeyEnter {
+			setFocus(sb.contentView)
+		} else if event.Key() == tcell.KeyDown || event.Key() == tcell.KeyCtrlN {
+			if handler := sb.listView.InputHandler(); handler != nil {
+				handler(tcell.NewEventKey(tcell.KeyDown, event.Rune(), event.Modifiers()), setFocus)
 			}
+		} else if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyCtrlP {
+			if handler := sb.listView.InputHandler(); handler != nil {
+				handler(tcell.NewEventKey(tcell.KeyUp, event.Rune(), event.Modifiers()), setFocus)
+			}
+		}
+
+		if handler := sb.InputField.InputHandler(); handler != nil {
+			handler(event, setFocus)
 		}
 	})
 }

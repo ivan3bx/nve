@@ -1,6 +1,10 @@
 package nve
 
 import (
+	"fmt"
+	"math"
+	"strings"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
@@ -65,8 +69,37 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 		b.contentView.Clear()
 	}
 
-	for _, result := range lastResult {
-		b.AddItem(result.Filename, "", 0, nil)
+	selectedIndex := -1
+
+	for index, result := range lastResult {
+		displayName := result.DisplayName()
+		var formattedName string
+		if len(displayName) > 14 {
+			formattedName = fmt.Sprintf("%-20.20s..", displayName)
+		} else {
+			formattedName = fmt.Sprintf("%-22.22s", displayName)
+		}
+
+		b.AddItem(strings.Join([]string{formattedName, result.Snippet}, " : "), "", 0, nil)
+
+		if selectedIndex == -1 && strings.HasPrefix(displayName, notes.LastQuery) {
+			selectedIndex = index
+		}
+	}
+
+	_, _, _, height := b.GetInnerRect()
+
+	if selectedIndex >= 0 {
+		// highlights row with exact prefix match to search query.
+		b.SetCurrentItem(selectedIndex)
+
+		// scroll to view; use height of list box
+		b.SetOffset(int(math.Max(float64(selectedIndex-height+1), 0)), 0)
+	} else {
+		// highlight any selected row if not in visible rect
+		if !b.InRect(b.GetCurrentItem(), 0) {
+			b.SetOffset(b.GetCurrentItem(), 0)
+		}
 	}
 }
 

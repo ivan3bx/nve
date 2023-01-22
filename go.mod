@@ -3,6 +3,7 @@ module github.com/ivan3bx/nve
 go 1.19
 
 require (
+	github.com/bep/debounce v1.2.1
 	github.com/gdamore/tcell/v2 v2.5.4
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/mattn/go-sqlite3 v1.14.16
