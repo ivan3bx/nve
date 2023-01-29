@@ -38,7 +38,7 @@ func MustOpen(file string) *DB {
 
 	_, err = db.Exec(`
 		CREATE VIRTUAL TABLE IF NOT EXISTS content_index USING FTS5 (
-			document_id, filename, text
+			document_id, filename, text, tokenize = 'porter unicode61'
 		);
 
 	`)
