@@ -55,6 +55,7 @@ func (n *Notes) Search(text string) ([]string, error) {
 		err           error
 	)
 
+	log.Printf("[DEBUG] Notes: Search called with text='%s'", text)
 	n.LastQuery = text
 
 	if text == "" {
@@ -71,6 +72,7 @@ func (n *Notes) Search(text string) ([]string, error) {
 	n.LastSearchResults = searchResults
 
 	// 2. update results (save in field)
+	log.Printf("[DEBUG] Notes: Notifying %d observers of search results", len(n.observers))
 	n.Notify()
 
 	// 3. return results
