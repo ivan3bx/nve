@@ -71,12 +71,58 @@ func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		if event.Key() == tcell.KeyEnter && sb.GetText() != "" {
 			setFocus(sb.contentView)
 		} else if event.Key() == tcell.KeyDown || event.Key() == tcell.KeyCtrlN {
-			if handler := sb.listView.InputHandler(); handler != nil {
-				handler(tcell.NewEventKey(tcell.KeyDown, event.Rune(), event.Modifiers()), setFocus)
+			if len(sb.notes.LastSearchResults) > 0 {
+				sb.listView.SetSelectedFocusOnly(false)
+
+				// Check if we're starting from an unselected state (empty search)
+				currentItem := sb.listView.GetCurrentItem()
+				if sb.GetText() == "" && currentItem == 0 {
+					// When starting from empty search, select the first item directly
+					sb.listView.SetCurrentItem(0)
+					log.Printf("[DEBUG] SearchBox: Empty search, selecting first item (index 0)")
+				} else {
+					// Otherwise let the ListBox handle the down arrow to update selection
+					if handler := sb.listView.InputHandler(); handler != nil {
+						handler(tcell.NewEventKey(tcell.KeyDown, event.Rune(), event.Modifiers()), setFocus)
+					}
+				}
+
+				// Now get the updated current item and sync everything
+				currentItem = sb.listView.GetCurrentItem()
+				if currentItem < len(sb.notes.LastSearchResults) {
+					filename := sb.notes.LastSearchResults[currentItem].DisplayName()
+					log.Printf("[DEBUG] SearchBox: Down arrow pressed, updating text to '%s'", filename)
+					sb.SetTextFromList(filename)
+					result := sb.notes.LastSearchResults[currentItem]
+					sb.contentView.SetFile(result.FileRef)
+				}
+			} else {
+				if handler := sb.listView.InputHandler(); handler != nil {
+					handler(tcell.NewEventKey(tcell.KeyDown, event.Rune(), event.Modifiers()), setFocus)
+				}
 			}
 		} else if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyCtrlP {
-			if handler := sb.listView.InputHandler(); handler != nil {
-				handler(tcell.NewEventKey(tcell.KeyUp, event.Rune(), event.Modifiers()), setFocus)
+			if len(sb.notes.LastSearchResults) > 0 {
+				sb.listView.SetSelectedFocusOnly(false)
+
+				// Let the ListBox handle the up arrow to update selection
+				if handler := sb.listView.InputHandler(); handler != nil {
+					handler(tcell.NewEventKey(tcell.KeyUp, event.Rune(), event.Modifiers()), setFocus)
+				}
+
+				// Now get the updated current item and sync everything
+				currentItem := sb.listView.GetCurrentItem()
+				if currentItem < len(sb.notes.LastSearchResults) {
+					filename := sb.notes.LastSearchResults[currentItem].DisplayName()
+					log.Printf("[DEBUG] SearchBox: Up arrow pressed, updating text to '%s'", filename)
+					sb.SetTextFromList(filename)
+					result := sb.notes.LastSearchResults[currentItem]
+					sb.contentView.SetFile(result.FileRef)
+				}
+			} else {
+				if handler := sb.listView.InputHandler(); handler != nil {
+					handler(tcell.NewEventKey(tcell.KeyUp, event.Rune(), event.Modifiers()), setFocus)
+				}
 			}
 		}
 

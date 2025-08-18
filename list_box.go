@@ -120,14 +120,29 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 			return
 		}
 
+		// Store the current item before handling the event
+		before := lb.GetCurrentItem()
+
 		// Allow the underlying List to handle input events
 		if handler := lb.List.InputHandler(); handler != nil {
 			handler(event, setFocus)
 		}
 
-		// Check if selection has changed
-		before := lb.GetCurrentItem()
+		// For arrow keys, always sync SearchBox and ContentView regardless of selection change
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown || event.Key() == tcell.KeyCtrlP || event.Key() == tcell.KeyCtrlN {
+			lb.SetSelectedFocusOnly(false)
+			currentItem := lb.GetCurrentItem()
+			if currentItem < len(lb.notes.LastSearchResults) {
+				filename := lb.notes.LastSearchResults[currentItem].DisplayName()
+				log.Printf("[DEBUG] ListBox: Arrow key pressed, updating search box to '%s'", filename)
+				lb.searchView.SetTextFromList(filename)
+				result := lb.notes.LastSearchResults[currentItem]
+				lb.contentView.SetFile(result.FileRef)
+			}
+			return
+		}
 
+		// Check if selection has changed for other events
 		if before != lb.GetCurrentItem() {
 			log.Printf("[DEBUG] ListBox: Selection changed from %d to %d", before, lb.GetCurrentItem())
 			lb.SetSelectedFocusOnly(false)
