@@ -46,11 +46,10 @@ func main() {
 			}
 			return &tcell.EventKey{}
 		case tcell.KeyEscape:
-			if !contentBox.HasFocus() {
-				listBox.SetCurrentItem(0)
-				app.SetFocus(searchBox)
-				return &tcell.EventKey{}
-			}
+			app.SetFocus(searchBox)
+			searchBox.SetText("")
+			notes.Search("")
+			return &tcell.EventKey{}
 		}
 
 		return event
