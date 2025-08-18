@@ -2,6 +2,7 @@ package nve
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"strings"
 
@@ -12,12 +13,15 @@ import (
 type ListBox struct {
 	*tview.List
 	contentView *ContentBox
+	searchView  *SearchBox
+	notes       *Notes
 }
 
 func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 	box := ListBox{
 		List:        tview.NewList(),
 		contentView: contentView,
+		notes:       notes,
 	}
 
 	box.ShowSecondaryText(false).
@@ -36,7 +40,7 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 		SetBorderPadding(0, 0, 1, 1).
 		SetTitleAlign(tview.AlignLeft)
 
-	box.SetSelectedFocusOnly(true)
+	box.SetSelectedFocusOnly(false)
 
 	box.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		if (!box.HasFocus() && notes.LastQuery == "") || len(notes.LastSearchResults) == 0 {
@@ -60,6 +64,8 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	emptyQuery := notes.LastQuery == ""
 	lastResult := notes.LastSearchResults
+
+	log.Printf("[DEBUG] ListBox: SearchResultsUpdate called - query='%s', emptyQuery=%t, results=%d", notes.LastQuery, emptyQuery, len(lastResult))
 
 	b.Clear()
 
@@ -106,12 +112,34 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 // InputHandler overrides default handling to switch focus away from search box when necessary.
 func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return lb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+
+		// Handle Enter key press
 		if event.Key() == tcell.KeyEnter {
 			setFocus(lb.contentView)
-		} else {
-			if handler := lb.List.InputHandler(); handler != nil {
-				handler(event, setFocus)
-			}
+			log.Printf("[DEBUG] ListBox: Enter pressed, setting focus to content view")
+			return
 		}
+
+		// Allow the underlying List to handle input events
+		if handler := lb.List.InputHandler(); handler != nil {
+			handler(event, setFocus)
+		}
+
+		// Check if selection has changed
+		before := lb.GetCurrentItem()
+
+		if before != lb.GetCurrentItem() {
+			log.Printf("[DEBUG] ListBox: Selection changed from %d to %d", before, lb.GetCurrentItem())
+			lb.SetSelectedFocusOnly(false)
+			if lb.GetCurrentItem() < len(lb.notes.LastSearchResults) {
+				filename := lb.notes.LastSearchResults[lb.GetCurrentItem()].DisplayName()
+				log.Printf("[DEBUG] ListBox: Updating search box to '%s'", filename)
+				lb.searchView.SetTextFromList(filename)
+			}
+			return
+		}
+
+		// no change in selection (example: entering arrow key when already at top/bottom of list)
+		log.Printf("[DEBUG] ListBox: No change in selection, current item remains %d", before)
 	})
 }
