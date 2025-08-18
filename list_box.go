@@ -112,7 +112,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 // isNavigationalKey returns true if the key is for navigation purposes
 func (lb *ListBox) isNavigationalKey(event *tcell.EventKey) bool {
 	switch event.Key() {
-	case tcell.KeyUp, tcell.KeyDown, tcell.KeyCtrlP, tcell.KeyCtrlN,
+	case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyCtrlP, tcell.KeyCtrlN,
 		tcell.KeyHome, tcell.KeyEnd, tcell.KeyPgUp, tcell.KeyPgDn,
 		tcell.KeyEnter, tcell.KeyEscape, tcell.KeyTab:
 		return true
@@ -124,6 +124,17 @@ func (lb *ListBox) isNavigationalKey(event *tcell.EventKey) bool {
 // InputHandler overrides default handling to switch focus away from search box when necessary.
 func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return lb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+
+		// Handle left arrow to move focus to SearchBox with cursor at start
+		if event.Key() == tcell.KeyLeft {
+			log.Printf("[DEBUG] ListBox: Left arrow pressed, moving focus to SearchBox")
+			setFocus(lb.searchView)
+			// Move cursor to start by simulating Home key press
+			if handler := lb.searchView.InputHandler(); handler != nil {
+				handler(tcell.NewEventKey(tcell.KeyHome, 0, tcell.ModNone), setFocus)
+			}
+			return
+		}
 
 		// Handle Enter key press
 		if event.Key() == tcell.KeyEnter {
