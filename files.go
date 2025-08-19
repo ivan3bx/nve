@@ -16,6 +16,7 @@ var SUPPORTED_FILETYPES = map[string]bool{
 	".md":    true,
 	".mdown": true,
 	".go":    true,
+	".rb":    true,
 }
 
 type FileRef struct {
