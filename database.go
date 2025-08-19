@@ -3,6 +3,7 @@ package nve
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
@@ -252,6 +253,74 @@ func (db *DB) Update(oldRef, newRef *FileRef, data []byte) error {
 	`, string(data), oldRef.DocumentID)
 
 	return errors.WithStack(err)
+}
+
+// GetAllFileRefs returns all files currently in the database
+func (db *DB) GetAllFileRefs() ([]*FileRef, error) {
+	var files []*FileRef
+
+	err := db.Select(&files, `
+		SELECT
+			id,
+			filename,
+			md5,
+			modified_at
+		FROM
+			documents
+		ORDER BY filename
+	`)
+
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return files, nil
+}
+
+// PruneFileRefs removes a file from both documents and content_index tables
+func (db *DB) PruneFileRefs(refs []*FileRef) error {
+
+	var (
+		query string
+		args  []interface{}
+		err   error
+
+		docIDs []int64
+	)
+
+	for _, ref := range refs {
+		docIDs = append(docIDs, ref.DocumentID)
+	}
+
+	//
+	// Delete from content_index table
+	//
+	if query, args, err = sqlx.In(`DELETE FROM content_index WHERE document_id IN (?)`, docIDs); err != nil {
+		return errors.WithStack(err)
+	}
+
+	query = db.Rebind(query)
+
+	if _, err := db.Exec(query, args...); err != nil {
+		return errors.WithStack(err)
+	}
+
+	//
+	// Delete from documents table
+	//
+	if query, args, err = sqlx.In(`DELETE FROM documents WHERE id IN (?)`, docIDs); err != nil {
+		return errors.WithStack(err)
+	}
+
+	query = db.Rebind(query)
+
+	if _, err := db.Exec(query, args...); err != nil {
+		return errors.WithStack(err)
+	}
+
+	log.Printf("[DEBUG] Pruned %d files from database", len(refs))
+
+	return nil
 }
 
 // ftsMatchString converts an expression into a wildcard match.

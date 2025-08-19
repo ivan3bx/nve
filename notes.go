@@ -135,12 +135,41 @@ func (n *Notes) Notify() {
 func (n *Notes) Refresh() error {
 	var db = n.db
 
+	// Get all files currently on disk
 	files, err := scanDirectory(n.config.Filepath)
-
 	if err != nil {
 		return err
 	}
 
+	// Create a map of existing files for quick lookup
+	existingFiles := make(map[string]bool)
+	for _, file := range files {
+		existingFiles[file] = true
+	}
+
+	// Get all files currently in the database
+	dbFiles, err := db.GetAllFileRefs()
+	if err != nil {
+		return err
+	}
+
+	// Prune files from database that no longer exist on disk
+	refsToPrune := []*FileRef{}
+
+	for _, dbFile := range dbFiles {
+		if !existingFiles[dbFile.Filename] {
+			refsToPrune = append(refsToPrune, dbFile)
+		}
+	}
+
+	if len(refsToPrune) > 0 {
+		if err := db.PruneFileRefs(refsToPrune); err != nil {
+			logger.Printf("Error pruning files from database: %v", err)
+			return err
+		}
+	}
+
+	// Process files that exist on disk (existing logic)
 	for _, file := range files {
 		md5, _ := calculateMD5(file)
 		stats, _ := os.Stat(file)
