@@ -1,12 +1,23 @@
 package main
 
 import (
+	"log"
+	"os"
+
 	"github.com/gdamore/tcell/v2"
 	"github.com/ivan3bx/nve"
 	"github.com/rivo/tview"
 )
 
 func main() {
+	// Setup debug logging to file
+	logFile, err := os.OpenFile("nve-debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+
 	var (
 		app   = tview.NewApplication()
 		notes = nve.NewNotes(nve.NotesConfig{
@@ -35,11 +46,10 @@ func main() {
 			}
 			return &tcell.EventKey{}
 		case tcell.KeyEscape:
-			if !contentBox.HasFocus() {
-				listBox.SetCurrentItem(0)
-				app.SetFocus(searchBox)
-				return &tcell.EventKey{}
-			}
+			app.SetFocus(searchBox)
+			searchBox.SetText("")
+			notes.Search("")
+			return &tcell.EventKey{}
 		}
 
 		return event

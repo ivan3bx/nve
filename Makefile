@@ -14,11 +14,11 @@ clean:
 
 .PHONY: build
 build: .goreleaser.yml
-	goreleaser build --rm-dist --snapshot -f .goreleaser.yml
+	goreleaser build --clean --snapshot -f .goreleaser.yml
 
 .PHONY: build-local
 build-local:
-	goreleaser build --single-target --rm-dist --snapshot -f .goreleaser.yml
+	goreleaser build --clean --single-target --snapshot -f .goreleaser.yml
 
 .PHONY: test
 test:
