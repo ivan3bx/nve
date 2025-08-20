@@ -133,7 +133,7 @@ func (db *DB) Recent(limit int) ([]*SearchResult, error) {
 	err = db.Select(&res, `
 		SELECT
 			docs.id, docs.filename, docs.md5, docs.modified_at,
-			REPLACE(substr(cti.text, 0, 120), char(10), ' ') as snippet
+			RTRIM(REPLACE(substr(cti.text, 0, 120), char(10), ' ')) as snippet
 		FROM
 			documents docs
 		INNER JOIN
@@ -165,7 +165,7 @@ func (db *DB) Search(text string) ([]*SearchResult, error) {
 	err = db.Select(&res, `
 		SELECT
 			docs.id, docs.filename, docs.md5, docs.modified_at,
-			REPLACE(snippet(content_index, 2, "**", "**", '...', 10), char(10), ' ') as snippet
+			RTRIM(REPLACE(snippet(content_index, 2, "**", "**", '...', 10), char(10), ' ')) as snippet
 		FROM
 			documents docs
 		INNER JOIN
