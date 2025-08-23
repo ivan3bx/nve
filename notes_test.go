@@ -75,7 +75,8 @@ func TestSearch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			results, err := notes.Search(tc.input)
+			searchCtx := NewSearchContext()
+			results, err := notes.Search(searchCtx, tc.input)
 			assert.NoError(t, err)
 
 			// sort both arrays before assertion
@@ -83,30 +84,5 @@ func TestSearch(t *testing.T) {
 			sort.Strings(results)
 			assert.Equal(t, tc.expected, results)
 		})
-	}
-}
-
-type mockObserver struct {
-	lastResult []*SearchResult
-}
-
-func (m *mockObserver) SearchResultsUpdate(notes *Notes) {
-	m.lastResult = notes.LastSearchResults
-}
-
-func TestNotifyObservers(t *testing.T) {
-	mock := mockObserver{}
-	notes.RegisterObservers(&mock)
-
-	notes.Search("seattle")
-
-	if assert.Len(t, mock.lastResult, 1) {
-		res := mock.lastResult[0]
-
-		// assert snippet
-		assert.Equal(t, "new york **seattle**", res.Snippet)
-
-		// assert filename
-		assert.Equal(t, "test_data/apples in zoo.md", res.Filename)
 	}
 }

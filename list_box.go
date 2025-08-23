@@ -14,14 +14,14 @@ type ListBox struct {
 	*tview.List
 	contentView *ContentBox
 	searchView  *SearchBox
-	notes       *Notes
+	searchCtx   *SearchContext
 }
 
-func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
+func NewListBox(searchCtx *SearchContext, contentView *ContentBox) *ListBox {
 	box := ListBox{
 		List:        tview.NewList(),
 		contentView: contentView,
-		notes:       notes,
+		searchCtx:   searchCtx,
 	}
 
 	box.ShowSecondaryText(false).
@@ -43,17 +43,17 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 	box.SetSelectedFocusOnly(false)
 
 	box.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		if (!box.HasFocus() && notes.LastQuery == "") || len(notes.LastSearchResults) == 0 {
+		if (!box.HasFocus() && searchCtx.LastQuery == "") || len(searchCtx.LastSearchResults) == 0 {
 			box.contentView.Clear()
 		} else {
-			result := notes.LastSearchResults[index]
+			result := searchCtx.LastSearchResults[index]
 			box.contentView.SetFile(result.FileRef)
 		}
 	})
 
 	box.SetFocusFunc(func() {
-		if notes.LastQuery == "" {
-			result := notes.LastSearchResults[box.GetCurrentItem()]
+		if searchCtx.LastQuery == "" {
+			result := searchCtx.LastSearchResults[box.GetCurrentItem()]
 			box.contentView.SetFile(result.FileRef)
 		}
 	})
@@ -61,11 +61,11 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 	return &box
 }
 
-func (b *ListBox) SearchResultsUpdate(notes *Notes) {
-	emptyQuery := notes.LastQuery == ""
-	lastResult := notes.LastSearchResults
+func (b *ListBox) SearchResultsUpdate(searchCtx *SearchContext) {
+	emptyQuery := searchCtx.LastQuery == ""
+	lastResult := searchCtx.LastSearchResults
 
-	log.Printf("[DEBUG] ListBox: SearchResultsUpdate called - query='%s', emptyQuery=%t, results=%d", notes.LastQuery, emptyQuery, len(lastResult))
+	log.Printf("[DEBUG] ListBox: SearchResultsUpdate called - query='%s', emptyQuery=%t, results=%d", searchCtx.LastQuery, emptyQuery, len(lastResult))
 
 	b.Clear()
 
@@ -88,7 +88,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 
 		b.AddItem(strings.Join([]string{formattedName, result.Snippet}, " : "), "", 0, nil)
 
-		if selectedIndex == -1 && strings.HasPrefix(displayName, notes.LastQuery) {
+		if selectedIndex == -1 && strings.HasPrefix(displayName, searchCtx.LastQuery) {
 			selectedIndex = index
 		}
 	}
@@ -167,11 +167,11 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown || event.Key() == tcell.KeyCtrlP || event.Key() == tcell.KeyCtrlN {
 			lb.SetSelectedFocusOnly(false)
 			currentItem := lb.GetCurrentItem()
-			if currentItem < len(lb.notes.LastSearchResults) {
-				filename := lb.notes.LastSearchResults[currentItem].DisplayName()
+			if currentItem < len(lb.searchCtx.LastSearchResults) {
+				filename := lb.searchCtx.LastSearchResults[currentItem].DisplayName()
 				log.Printf("[DEBUG] ListBox: Arrow key pressed, updating search box to '%s'", filename)
 				lb.searchView.SetTextFromList(filename)
-				result := lb.notes.LastSearchResults[currentItem]
+				result := lb.searchCtx.LastSearchResults[currentItem]
 				lb.contentView.SetFile(result.FileRef)
 			}
 			return
@@ -181,8 +181,8 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 		if before != lb.GetCurrentItem() {
 			log.Printf("[DEBUG] ListBox: Selection changed from %d to %d", before, lb.GetCurrentItem())
 			lb.SetSelectedFocusOnly(false)
-			if lb.GetCurrentItem() < len(lb.notes.LastSearchResults) {
-				filename := lb.notes.LastSearchResults[lb.GetCurrentItem()].DisplayName()
+			if lb.GetCurrentItem() < len(lb.searchCtx.LastSearchResults) {
+				filename := lb.searchCtx.LastSearchResults[lb.GetCurrentItem()].DisplayName()
 				log.Printf("[DEBUG] ListBox: Updating search box to '%s'", filename)
 				lb.searchView.SetTextFromList(filename)
 			}

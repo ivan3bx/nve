@@ -25,13 +25,17 @@ func main() {
 		})
 
 		// View hierarchy
-		contentBox = nve.NewContentBox()
-		listBox    = nve.NewListBox(contentBox, notes)
-		searchBox  = nve.NewSearchBox(listBox, contentBox, notes)
+		searchCtx  = nve.NewSearchContext()
+		contentBox = nve.NewContentBox(searchCtx)
+		listBox    = nve.NewListBox(searchCtx, contentBox)
+		searchBox  = nve.NewSearchBox(searchCtx, listBox, contentBox, notes)
 	)
 
-	notes.RegisterObservers(listBox)
-	notes.Notify()
+	searchCtx.RegisterObservers(listBox)
+
+	// Populate list box * notes with default search
+	notes.Search(searchCtx, "")
+	// searchCtx.Notify()
 
 	// global input events
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -48,7 +52,7 @@ func main() {
 		case tcell.KeyEscape:
 			app.SetFocus(searchBox)
 			searchBox.SetText("")
-			notes.Search("")
+			notes.Search(searchCtx, "")
 			return &tcell.EventKey{}
 		}
 

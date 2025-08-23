@@ -12,6 +12,7 @@ type SearchBox struct {
 	listView         *ListBox
 	contentView      *ContentBox
 	notes            *Notes
+	searchCtx        *SearchContext
 	updatingFromList bool
 }
 
@@ -23,12 +24,13 @@ func (sb *SearchBox) SetTextFromList(text string) {
 	sb.updatingFromList = false
 }
 
-func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *SearchBox {
+func NewSearchBox(searchCtx *SearchContext, listView *ListBox, contentView *ContentBox, notes *Notes) *SearchBox {
 	res := SearchBox{
 		InputField:  tview.NewInputField(),
 		listView:    listView,
 		contentView: contentView,
 		notes:       notes,
+		searchCtx:   searchCtx,
 	}
 
 	listView.searchView = &res
@@ -49,7 +51,7 @@ func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *Sea
 	res.SetDoneFunc(func(key tcell.Key) {
 		switch key {
 		case tcell.KeyEnter:
-			if len(notes.LastSearchResults) == 0 {
+			if len(searchCtx.LastSearchResults) == 0 {
 				newNote, err := notes.CreateNote(res.GetText())
 
 				if err != nil {
@@ -57,7 +59,7 @@ func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *Sea
 					break
 				}
 
-				notes.Search(newNote.DisplayName())
+				notes.Search(searchCtx, newNote.DisplayName())
 			}
 		}
 	})
@@ -68,11 +70,11 @@ func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *Sea
 // syncWithListSelection updates SearchBox text and ContentView with current selection
 func (sb *SearchBox) syncWithListSelection(keyAction string) {
 	currentItem := sb.listView.GetCurrentItem()
-	if currentItem < len(sb.notes.LastSearchResults) {
-		filename := sb.notes.LastSearchResults[currentItem].DisplayName()
+	if currentItem < len(sb.searchCtx.LastSearchResults) {
+		filename := sb.searchCtx.LastSearchResults[currentItem].DisplayName()
 		log.Printf("[DEBUG] SearchBox: %s, updating text to '%s'", keyAction, filename)
 		sb.SetTextFromList(filename)
-		result := sb.notes.LastSearchResults[currentItem]
+		result := sb.searchCtx.LastSearchResults[currentItem]
 		sb.contentView.SetFile(result.FileRef)
 	}
 }
@@ -87,7 +89,7 @@ func (sb *SearchBox) delegateToListView(key tcell.Key, rune rune, modifiers tcel
 // handleArrowKey processes up/down arrow keys with proper synchronization
 func (sb *SearchBox) handleArrowKey(event *tcell.EventKey, setFocus func(p tview.Primitive), isDown bool) {
 	// Early return if no results - just delegate
-	if len(sb.notes.LastSearchResults) == 0 {
+	if len(sb.searchCtx.LastSearchResults) == 0 {
 		sb.delegateToListView(event.Key(), event.Rune(), event.Modifiers(), setFocus)
 		return
 	}
@@ -145,7 +147,7 @@ func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		after := sb.GetText()
 		if before != after && !sb.updatingFromList {
 			log.Printf("[DEBUG] SearchBox: Text changed from '%s' to '%s', triggering search", before, after)
-			sb.notes.Search(after)
+			sb.notes.Search(sb.searchCtx, after)
 		} else if before != after && sb.updatingFromList {
 			log.Printf("[DEBUG] SearchBox: Text changed from '%s' to '%s' (from list update, skipping search)", before, after)
 		}

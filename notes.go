@@ -17,12 +17,8 @@ type NotesConfig struct {
 }
 
 type Notes struct {
-	LastQuery         string
-	LastSearchResults []*SearchResult
-
-	config    NotesConfig
-	db        *DB
-	observers []Observer
+	config NotesConfig
+	db     *DB
 }
 
 var DefaultDBPath = "./nve.db"
@@ -49,15 +45,15 @@ func NewNotes(config NotesConfig) *Notes {
 }
 
 // Search returns a set of filepaths matching the given search string.
-func (n *Notes) Search(text string) ([]string, error) {
+func (n *Notes) Search(searchCtx *SearchContext, text string) ([]string, error) {
 	var (
 		searchResults []*SearchResult
 		err           error
 	)
 
 	log.Printf("[DEBUG] Notes: Search called with text='%s'", text)
-	n.LastQuery = text
 
+	// 1. perform the search
 	if text == "" {
 		searchResults, err = n.db.Recent(20)
 	} else {
@@ -68,17 +64,15 @@ func (n *Notes) Search(text string) ([]string, error) {
 		return nil, err
 	}
 
-	// 1. perform the search
-	n.LastSearchResults = searchResults
-
 	// 2. update results (save in field)
-	log.Printf("[DEBUG] Notes: Notifying %d observers of search results", len(n.observers))
-	n.Notify()
+	searchCtx.LastQuery = text
+	searchCtx.LastSearchResults = searchResults
+	searchCtx.Notify()
 
 	// 3. return results
-	res := make([]string, 0)
+	res := make([]string, 0, len(searchResults))
 
-	for _, file := range n.LastSearchResults {
+	for _, file := range searchResults {
 		res = append(res, file.Filename)
 	}
 
@@ -116,20 +110,6 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 	}
 
 	return &fileRef, nil
-}
-
-func (n *Notes) RegisterObservers(obs ...Observer) {
-	if n.observers != nil {
-		n.observers = obs
-	} else {
-		n.observers = append(n.observers, obs...)
-	}
-}
-
-func (n *Notes) Notify() {
-	for _, obj := range n.observers {
-		obj.SearchResultsUpdate(n)
-	}
 }
 
 func (n *Notes) Refresh() error {
@@ -195,6 +175,5 @@ func (n *Notes) Refresh() error {
 		}
 	}
 
-	n.Search("")
 	return nil
 }

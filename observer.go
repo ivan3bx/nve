@@ -1,5 +1,5 @@
 package nve
 
 type Observer interface {
-	SearchResultsUpdate(*Notes)
+	SearchResultsUpdate(*SearchContext)
 }
