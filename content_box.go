@@ -12,9 +12,18 @@ import (
 	"github.com/rivo/tview"
 )
 
+// ContentMode represents the interface for different content display modes
+type ContentMode interface {
+	tview.Primitive
+	SetContent(content string)
+	GetContent() string
+	Clear()
+}
+
 type ContentBox struct {
-	EditArea *tview.TextArea
-	TextView *tview.TextView
+	editMode    *EditMode
+	viewMode    *ViewMode
+	currentMode ContentMode
 
 	debounce    func(func())
 	currentFile *FileRef
@@ -23,40 +32,31 @@ type ContentBox struct {
 	searchCtx *SearchContext
 }
 
+// Ensure ContentBox implements tview.Primitive
+var _ tview.Primitive = (*ContentBox)(nil)
+
 func NewContentBox(sctx *SearchContext) *ContentBox {
+	// Create the underlying components
 	content := ContentBox{
-		EditArea:   tview.NewTextArea(),
-		TextView:   tview.NewTextView(),
 		debounce:   debounce.New(300 * time.Millisecond),
 		isEditMode: false,
 		searchCtx:  sctx,
 	}
 
-	// Configure TextArea
-	content.EditArea.SetBorder(true).
+	// Content modes share bAttrs attributes
+	bAttrs := tview.NewBox().SetBorder(true).
 		SetTitle("Content").
 		SetTitleColor(tcell.ColorDarkOrange).
 		SetBorderStyle(tcell.StyleDefault.Dim(true)).
 		SetBorderPadding(1, 0, 1, 1).
 		SetTitleAlign(tview.AlignLeft)
 
-	// Configure TextView for highlighting
-	content.TextView.SetBorder(true).
-		SetTitle("Content").
-		SetTitleColor(tcell.ColorDarkOrange).
-		SetBorderStyle(tcell.StyleDefault.Dim(true)).
-		SetBorderPadding(1, 0, 1, 1).
-		SetTitleAlign(tview.AlignLeft)
+	// Create mode strategies
+	content.editMode = NewEditMode(&content, bAttrs)
+	content.viewMode = NewViewMode(sctx, bAttrs)
 
-	// Enable color markup processing
-	content.TextView.SetDynamicColors(true)
+	content.currentMode = content.viewMode // Start in view mode
 
-	content.EditArea.SetFocusFunc(func() {
-		// ignore edits if there is no current file
-		if content.currentFile == nil {
-			content.EditArea.Blur()
-		}
-	})
 	return &content
 }
 
@@ -80,46 +80,24 @@ func highlightText(content, searchTerm string) string {
 
 // GetCurrentView returns the currently active view component
 func (b *ContentBox) GetCurrentView() tview.Primitive {
-	if b.isEditMode {
-		return b.EditArea
-	}
-	return b.TextView
+	return b.currentMode
 }
 
-// Implement tview.Primitive interface by delegating to the current view
-func (b *ContentBox) Draw(screen tcell.Screen) {
-	b.GetCurrentView().Draw(screen)
-}
-
-func (b *ContentBox) GetRect() (int, int, int, int) {
-	return b.GetCurrentView().GetRect()
-}
-
-func (b *ContentBox) SetRect(x, y, width, height int) {
-	b.EditArea.SetRect(x, y, width, height)
-	b.TextView.SetRect(x, y, width, height)
-}
-
-func (b *ContentBox) Focus(delegate func(p tview.Primitive)) {
-	// Switch to edit mode when content box gains focus
-	if !b.isEditMode {
-		b.switchToEditMode()
-	}
-	b.GetCurrentView().Focus(delegate)
-}
-
+// switchToEditMode switches to edit mode
 func (b *ContentBox) switchToEditMode() {
 	if b.currentFile == nil {
 		return
 	}
 
 	b.isEditMode = true
+	b.currentMode = b.editMode
 
-	// Copy current content to TextArea for editing
+	// Copy current content to edit mode
 	content := GetContent(b.currentFile.Filename)
-	b.EditArea.SetText(content, false)
+	b.currentMode.SetContent(content)
 }
 
+// switchToViewMode switches to view mode
 func (b *ContentBox) switchToViewMode() {
 	if b.currentFile == nil {
 		return
@@ -127,72 +105,56 @@ func (b *ContentBox) switchToViewMode() {
 
 	b.isEditMode = false
 
-	// Copy current content from TextArea and apply highlighting
-	content := b.EditArea.GetText()
-	highlighted := highlightText(content, b.searchCtx.LastQuery)
-	b.TextView.SetText(highlighted)
+	// Get content from current mode before switching
+	content := b.currentMode.GetContent()
+	b.currentMode = b.viewMode
+
+	// Apply content to view mode (which handles highlighting)
+	b.currentMode.SetContent(content)
+}
+
+// Implement tview.Primitive interface by delegating to the current mode
+func (b *ContentBox) Draw(screen tcell.Screen)      { b.currentMode.Draw(screen) }
+func (b *ContentBox) GetRect() (int, int, int, int) { return b.currentMode.GetRect() }
+func (b *ContentBox) HasFocus() bool                { return b.currentMode.HasFocus() }
+func (b *ContentBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+	return b.currentMode.InputHandler()
+}
+func (b *ContentBox) MouseHandler() func(action tview.MouseAction, event *tcell.EventMouse, setFocus func(p tview.Primitive)) (consumed bool, capture tview.Primitive) {
+	return b.currentMode.MouseHandler()
+}
+
+func (b *ContentBox) SetRect(x, y, width, height int) {
+	// Set rect on both components so they're ready when switched
+	b.editMode.SetRect(x, y, width, height)
+	b.viewMode.SetRect(x, y, width, height)
+}
+
+func (b *ContentBox) Focus(delegate func(p tview.Primitive)) {
+	// Switch to edit mode when content box gains focus
+	if !b.isEditMode {
+		b.switchToEditMode()
+	}
+	b.currentMode.Focus(delegate)
 }
 
 func (b *ContentBox) Blur() {
 	// Switch back to view mode when losing focus
 	if b.isEditMode {
 		b.switchToViewMode()
-		b.EditArea.Blur()
-	} else {
-		b.TextView.Blur()
 	}
-}
-
-func (b *ContentBox) HasFocus() bool {
-	return b.GetCurrentView().HasFocus()
-}
-
-func (b *ContentBox) MouseHandler() func(action tview.MouseAction, event *tcell.EventMouse, setFocus func(p tview.Primitive)) (consumed bool, capture tview.Primitive) {
-	return b.GetCurrentView().MouseHandler()
+	b.currentMode.Blur()
 }
 
 func (b *ContentBox) Clear() {
 	b.currentFile = nil
-	if b.isEditMode {
-		b.EditArea.SetText("", true)
-	} else {
-		b.TextView.SetText("")
-	}
+	b.currentMode.Clear()
 }
 
 func (b *ContentBox) SetFile(f *FileRef) {
 	b.currentFile = f
 	content := GetContent(f.Filename)
-
-	if b.isEditMode {
-		b.EditArea.SetText(content, false)
-	} else {
-		// Apply highlighting for current search query
-		highlighted := highlightText(content, b.searchCtx.LastQuery)
-		b.TextView.SetText(highlighted)
-	}
-}
-
-// InputHandler overrides default handling to switch focus away from search box when necessary.
-func (b *ContentBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-	if b.isEditMode {
-		return b.EditArea.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
-			event = b.mapSpecialKeys(event)
-
-			before := b.EditArea.GetText()
-
-			if handler := b.EditArea.InputHandler(); handler != nil {
-				handler(event, setFocus)
-			}
-
-			if after := b.EditArea.GetText(); before != after {
-				b.queueSave(after)
-			}
-		})
-	} else {
-		// In view mode, just return TextView's input handler
-		return b.TextView.InputHandler()
-	}
+	b.currentMode.SetContent(content)
 }
 
 func (b *ContentBox) mapSpecialKeys(event *tcell.EventKey) *tcell.EventKey {
@@ -212,11 +174,12 @@ func (b *ContentBox) mapSpecialKeys(event *tcell.EventKey) *tcell.EventKey {
 	// delete empty line
 	case tcell.KeyCtrlK:
 		if b.isEditMode {
-			fromRow, fromCol, toRow, toCol := b.EditArea.GetCursor()
+			editMode := b.currentMode.(*EditMode)
+			fromRow, fromCol, toRow, toCol := editMode.GetCursor()
 
 			if fromRow == toRow && fromCol == toCol && fromCol == 0 {
-				if _, start, end := b.EditArea.GetSelection(); start == end {
-					r, _ := utf8.DecodeRuneInString(b.EditArea.GetText()[start:])
+				if _, start, end := editMode.GetSelection(); start == end {
+					r, _ := utf8.DecodeRuneInString(editMode.GetText()[start:])
 					if !unicode.IsLetter(r) {
 						event = tcell.NewEventKey(tcell.KeyDelete, event.Rune(), event.Modifiers())
 					}
