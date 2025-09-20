@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -51,6 +52,21 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 		}
 	})
 
+	// Custom Draw function will append timestamp to each line
+	box.SetDrawFunc(func(screen tcell.Screen, x, y, width, height int) (int, int, int, int) {
+		innerX, innerY, innerWidth, innerHeight := box.GetInnerRect()
+		offsetX, _ := box.GetOffset()
+
+		for i := offsetX; i < offsetX+innerHeight && i < box.GetItemCount(); i++ {
+			result := notes.LastSearchResults[i]
+			log.Printf("[DEBUG] ListBox: DrawFunc called - Item %d: %d", i, len(result.Snippet))
+			box.SetItemText(i, formatResult(result, innerWidth), "")
+
+		}
+
+		return innerX, innerY, innerWidth, innerHeight
+	})
+
 	box.SetFocusFunc(func() {
 		if notes.LastQuery == "" {
 			result := notes.LastSearchResults[box.GetCurrentItem()]
@@ -78,17 +94,10 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	selectedIndex := -1
 
 	for index, result := range lastResult {
-		displayName := result.DisplayName()
-		var formattedName string
-		if len(displayName) > 14 {
-			formattedName = fmt.Sprintf("%-20.20s..", displayName)
-		} else {
-			formattedName = fmt.Sprintf("%-22.22s", displayName)
-		}
+		mainText := formatResult(result, -1)
+		b.AddItem(mainText, "", 0, nil)
 
-		b.AddItem(strings.Join([]string{formattedName, result.Snippet}, " : "), "", 0, nil)
-
-		if selectedIndex == -1 && strings.HasPrefix(displayName, notes.LastQuery) {
+		if selectedIndex == -1 && strings.HasPrefix(result.DisplayName(), notes.LastQuery) {
 			selectedIndex = index
 		}
 	}
@@ -107,6 +116,59 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 			b.SetOffset(b.GetCurrentItem(), 0)
 		}
 	}
+}
+
+func formatResult(result *SearchResult, maxWidth int) string {
+	// Format of a single line in the list box:
+	// <filename> : <snippet> <timestamp>
+	//
+	//   Filename is left-aligned, max 22 characters (20 + ".." if truncated)
+	//   Snippet is left-aligned, max width depends on overall maxWidth
+	//   Timestamp is right-aligned, fixed width of 20 characters (e.g., "Aug 16, 2025 12:15PM", or "5 min ago", or "now")
+	//
+	// If maxWidth is -1, no truncation or padding is applied to snippet or timestamp.
+	// If maxWidth < 60, filename is omitted.
+
+	filename := result.DisplayName()
+	snippet := result.Snippet
+	timestamp := formatModifiedTime(result.ModifiedAt)
+
+	if len(filename) > 20 {
+		filename = strings.TrimSpace(filename[:20])
+		log.Printf("[DEBUG] ListBox: truncated filename to '%s'", filename)
+		filename = fmt.Sprintf("%s...", filename)
+	} else {
+		filename = fmt.Sprintf("%-22s", filename)
+	}
+
+	timestamp = fmt.Sprintf("%20s", timestamp)
+
+	// Replace newlines, tabs with spaces and collapse multiple spaces
+	snippet = strings.Join(strings.Fields(snippet), " ")
+
+	maxWidthOfSnippet := maxWidth
+
+	if maxWidth < 0 {
+		maxWidthOfSnippet = maxWidth - len(filename) - len(" | ")
+	} else {
+		maxWidthOfSnippet = maxWidth - len(filename) - len(timestamp) - len(" | ") - len(" ")
+	}
+
+	if maxWidthOfSnippet > 0 && len(snippet) > maxWidthOfSnippet {
+		snippet = snippet[:maxWidthOfSnippet-2] + ".."
+	} else {
+		// pad snippet to maxWidthOfSnippet
+		snippet = fmt.Sprintf("%-*s", maxWidthOfSnippet, snippet)
+	}
+
+	mainText := ""
+	if maxWidth < 0 {
+		mainText = strings.TrimSpace(fmt.Sprintf("%s   %s", filename, snippet))
+	} else {
+		mainText = fmt.Sprintf("%s   %s %s", filename, snippet, timestamp)
+	}
+
+	return tview.Escape(mainText)
 }
 
 // isNavigationalKey returns true if the key is for navigation purposes
@@ -192,4 +254,17 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 		// no change in selection (example: entering arrow key when already at top/bottom of list)
 		log.Printf("[DEBUG] ListBox: No change in selection, current item remains %d", before)
 	})
+}
+
+func formatModifiedTime(modTime time.Time) string {
+	now := time.Now()
+	diff := now.Sub(modTime)
+
+	// Less than 1 day: show relative time
+	if diff < 24*time.Hour {
+		return modTime.Format("3:04PM")
+	}
+
+	// 1 week or older: show "Aug 16, 2025 12:15PM" format
+	return modTime.Format("Jan 02, 2006")
 }
