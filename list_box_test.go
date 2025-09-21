@@ -24,39 +24,46 @@ func TestFormatResult(t *testing.T) {
 		expected   string
 	}{
 		{
-			name:       "simple test",
-			filename:   "test.txt",
-			snippet:    "This is a test snippet",
-			maxWidth:   -1,
-			modifiedAt: "2023-10-01T15:04:05Z",
-			expected:   "test                     This is a test snippet",
+			name:     "width not specified",
+			filename: "test.txt",
+			snippet:  "This is a test snippet",
+			expected: "test                   This is a test snippet          Jan 01, 2001",
 		},
 		{
-			name:       "width includes date",
+			name:       "adds spaces to snippet to equal width",
+			filename:   "test.txt",
+			snippet:    "This is a test snippet",
+			maxWidth:   90,
+			modifiedAt: "2023-10-01T15:04:05Z",
+			expected:   "test                   This is a test snippet                                 Oct 01, 2023",
+		},
+		{
+			name:       "timestamp is formatted correctly",
 			filename:   "test_file.txt",
 			snippet:    "This is a test snippet",
 			maxWidth:   70,
 			modifiedAt: "2006-01-02T15:04:05Z",
-			expected:   "test_file                This is a test snippet           Jan 02, 2006",
+			expected:   "test_file              This is a test snippet             Jan 02, 2006",
 		},
 		{
 			name:     "no width specified",
 			filename: "test_file.txt",
 			snippet:  "package nve\n\nimport ( \"fmt\"\n\"log\"\n\"math\"\n\"strings\"\n\"time\"\n\"github.com/gdamore/tcell/v2\"",
-			expected: `test_file                package nve import ( "fmt" "log" "math" "strings" "time" "github.com/gdamore/tcell/v2"         Jan 01, 2001`,
+			expected: `test_file              package nve import ( "fmt" "log" "math" "strings" "time" "github.com/gdamore/tcell/v2"          Jan 01, 2001`,
+			maxWidth: -1,
 		},
 		{
 			name:     "width truncates",
 			filename: "test_file.txt",
 			snippet:  "package nve\n\nimport ( \"fmt\"\n\"log\"\n\"math\"\n\"strings\"\n\"time\"\n\"github.com/gdamore/tcell/v2\"",
-			expected: `test_file                package nve import ( "fmt" "log" "math" "strings" "time" "github.com/gda..         Jan 01, 2001`,
+			expected: `test_file              package nve import ( "fmt" "log" "math" "strings" "time" "github.com/gdam..          Jan 01, 2001`,
 			maxWidth: 120,
 		},
 		{
-			name:     "width is narrow",
+			name:     "width too narrow to fit more than two characters of snippet removes filename and timestamp",
 			filename: "test_file.txt",
 			snippet:  "package nve\n\nimport ( \"fmt\"\n\"log\"\n\"math\"\n\"strings\"\n\"time\"\n\"github.com/gdamore/tcell/v2\"",
-			expected: `test_file                package nve import ( "fmt" "log" "math" "strings" "time" "github.com/gda..         Jan 01, 2001`,
+			expected: `package nve import ( "fmt" "log" "math..`,
 			maxWidth: 40,
 		},
 	}
@@ -83,10 +90,11 @@ func TestFormatResult(t *testing.T) {
 
 			actual := formatResult(result, tt.maxWidth)
 
-			if len(tt.snippet) > tt.maxWidth && tt.maxWidth > 0 {
+			if tt.maxWidth > 0 {
 				// Ensure that the snippet was truncated appropriately
-				assert.Equal(t, len(actual), tt.maxWidth)
+				assert.Equal(t, len(actual), len(tt.expected))
 			}
+
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

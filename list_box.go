@@ -118,7 +118,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	}
 }
 
-func formatResult(result *SearchResult, maxWidth int) string {
+func formatResult(result *SearchResult, lineWidth int) string {
 	// Format of a single line in the list box:
 	// <filename> : <snippet> <timestamp>
 	//
@@ -129,44 +129,60 @@ func formatResult(result *SearchResult, maxWidth int) string {
 	// If maxWidth is -1, no truncation or padding is applied to snippet or timestamp.
 	// If maxWidth < 60, filename is omitted.
 
+	const (
+		ellipsis         = ".."
+		widthElipsis     = len(ellipsis)
+		widthFilename    = 20
+		paddingFilename  = 3
+		widthTimestamp   = 20
+		paddingTimestamp = 2
+		minSnippetWidth  = 10
+		minWidth         = widthFilename + paddingFilename + +minSnippetWidth + paddingTimestamp + widthTimestamp
+	)
+
 	filename := result.DisplayName()
 	snippet := result.Snippet
 	timestamp := formatModifiedTime(result.ModifiedAt)
 
-	if len(filename) > 20 {
-		filename = strings.TrimSpace(filename[:20])
-		log.Printf("[DEBUG] ListBox: truncated filename to '%s'", filename)
-		filename = fmt.Sprintf("%s...", filename)
-	} else {
-		filename = fmt.Sprintf("%-22s", filename)
+	if len(filename) > widthFilename {
+		// truncate filename to fit
+		filename = strings.TrimSpace(filename[:widthFilename-widthElipsis])
+		filename = fmt.Sprintf("%s%s", filename, ellipsis)
 	}
 
-	timestamp = fmt.Sprintf("%20s", timestamp)
+	// Right-pad filename to fixed width
+	filename = fmt.Sprintf("%-*s", widthFilename, filename)
 
-	// Replace newlines, tabs with spaces and collapse multiple spaces
+	// Left-pad timestamp to fixed width
+	timestamp = fmt.Sprintf("%*s", widthTimestamp, timestamp)
+
+	// Snippet: replace and collapse whitespace
 	snippet = strings.Join(strings.Fields(snippet), " ")
 
-	maxWidthOfSnippet := maxWidth
-
-	if maxWidth < 0 {
-		maxWidthOfSnippet = maxWidth - len(filename) - len(" | ")
-	} else {
-		maxWidthOfSnippet = maxWidth - len(filename) - len(timestamp) - len(" | ") - len(" ")
+	if lineWidth <= 0 {
+		lineWidth = minWidth - minSnippetWidth + len(snippet)
 	}
 
-	if maxWidthOfSnippet > 0 && len(snippet) > maxWidthOfSnippet {
-		snippet = snippet[:maxWidthOfSnippet-2] + ".."
-	} else {
-		// pad snippet to maxWidthOfSnippet
-		snippet = fmt.Sprintf("%-*s", maxWidthOfSnippet, snippet)
+	// Omit filename and timestamp if lineWidth is too narrow
+	if lineWidth < minWidth {
+		// too narrow to fit filename and timestamp, so omit both
+		if len(snippet) > lineWidth {
+			snippet = snippet[:lineWidth-widthElipsis] + ellipsis
+		}
+
+		return tview.Escape(fmt.Sprintf("%*s", lineWidth, snippet))
 	}
 
-	mainText := ""
-	if maxWidth < 0 {
-		mainText = strings.TrimSpace(fmt.Sprintf("%s   %s", filename, snippet))
-	} else {
-		mainText = fmt.Sprintf("%s   %s %s", filename, snippet, timestamp)
+	// Calculate max width for snippet
+	maxSnippetLen := lineWidth - minWidth + minSnippetWidth
+
+	if len(snippet) > maxSnippetLen {
+		snippet = snippet[:maxSnippetLen-widthElipsis] + ellipsis
 	}
+
+	snippet = fmt.Sprintf("%-*s", maxSnippetLen, snippet)
+
+	mainText := fmt.Sprintf("%s%s%s%s%s", filename, strings.Repeat(" ", paddingFilename), snippet, strings.Repeat(" ", paddingTimestamp), timestamp)
 
 	return tview.Escape(mainText)
 }
