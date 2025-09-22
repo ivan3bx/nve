@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -51,6 +52,21 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 		}
 	})
 
+	// Custom Draw function will append timestamp to each line
+	box.SetDrawFunc(func(screen tcell.Screen, x, y, width, height int) (int, int, int, int) {
+		innerX, innerY, innerWidth, innerHeight := box.GetInnerRect()
+		offsetX, _ := box.GetOffset()
+
+		for i := offsetX; i < offsetX+innerHeight && i < box.GetItemCount(); i++ {
+			result := notes.LastSearchResults[i]
+			log.Printf("[DEBUG] ListBox: DrawFunc called - Item %d: %d", i, len(result.Snippet))
+			box.SetItemText(i, formatResult(result, innerWidth), "")
+
+		}
+
+		return innerX, innerY, innerWidth, innerHeight
+	})
+
 	box.SetFocusFunc(func() {
 		if notes.LastQuery == "" {
 			result := notes.LastSearchResults[box.GetCurrentItem()]
@@ -78,17 +94,10 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	selectedIndex := -1
 
 	for index, result := range lastResult {
-		displayName := result.DisplayName()
-		var formattedName string
-		if len(displayName) > 14 {
-			formattedName = fmt.Sprintf("%-20.20s..", displayName)
-		} else {
-			formattedName = fmt.Sprintf("%-22.22s", displayName)
-		}
+		mainText := formatResult(result, -1)
+		b.AddItem(mainText, "", 0, nil)
 
-		b.AddItem(strings.Join([]string{formattedName, result.Snippet}, " : "), "", 0, nil)
-
-		if selectedIndex == -1 && strings.HasPrefix(displayName, notes.LastQuery) {
+		if selectedIndex == -1 && strings.HasPrefix(result.DisplayName(), notes.LastQuery) {
 			selectedIndex = index
 		}
 	}
@@ -107,6 +116,75 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 			b.SetOffset(b.GetCurrentItem(), 0)
 		}
 	}
+}
+
+func formatResult(result *SearchResult, lineWidth int) string {
+	// Format of a single line in the list box:
+	// <filename> : <snippet> <timestamp>
+	//
+	//   Filename is left-aligned, max 22 characters (20 + ".." if truncated)
+	//   Snippet is left-aligned, max width depends on overall maxWidth
+	//   Timestamp is right-aligned, fixed width of 20 characters (e.g., "Aug 16, 2025 12:15PM", or "5 min ago", or "now")
+	//
+	// If maxWidth is -1, no truncation or padding is applied to snippet or timestamp.
+	// If maxWidth < 60, filename is omitted.
+
+	const (
+		ellipsis         = ".."
+		widthElipsis     = len(ellipsis)
+		widthFilename    = 20
+		paddingFilename  = 3
+		widthTimestamp   = 20
+		paddingTimestamp = 2
+		minSnippetWidth  = 10
+		minWidth         = widthFilename + paddingFilename + +minSnippetWidth + paddingTimestamp + widthTimestamp
+	)
+
+	filename := result.DisplayName()
+	snippet := result.Snippet
+	timestamp := formatModifiedTime(result.ModifiedAt)
+
+	if len(filename) > widthFilename {
+		// truncate filename to fit
+		filename = strings.TrimSpace(filename[:widthFilename-widthElipsis])
+		filename = fmt.Sprintf("%s%s", filename, ellipsis)
+	}
+
+	// Right-pad filename to fixed width
+	filename = fmt.Sprintf("%-*s", widthFilename, filename)
+
+	// Left-pad timestamp to fixed width
+	timestamp = fmt.Sprintf("%*s", widthTimestamp, timestamp)
+
+	// Snippet: replace and collapse whitespace
+	snippet = strings.Join(strings.Fields(snippet), " ")
+
+	if lineWidth <= 0 {
+		lineWidth = minWidth - minSnippetWidth + len(snippet)
+	}
+
+	// Omit filename and timestamp if lineWidth is too narrow
+	if lineWidth < minWidth {
+		// too narrow to fit filename and timestamp, so omit both
+		if len(snippet) > lineWidth {
+			snippet = snippet[:lineWidth-widthElipsis] + ellipsis
+		}
+
+		return tview.Escape(fmt.Sprintf("%*s", lineWidth, snippet))
+	}
+
+	// Calculate max width for snippet
+	maxSnippetLen := lineWidth - minWidth + minSnippetWidth
+
+	if len(snippet) > maxSnippetLen {
+		snippet = snippet[:maxSnippetLen-widthElipsis] + ellipsis
+	}
+
+	snippet = fmt.Sprintf("%-*s", maxSnippetLen, snippet)
+
+	mainText := fmt.Sprintf("%s%s%s%s%s", filename, strings.Repeat(" ", paddingFilename), snippet, strings.Repeat(" ", paddingTimestamp), timestamp)
+
+	return tview.Escape(mainText)
 }
 
 // isNavigationalKey returns true if the key is for navigation purposes
@@ -192,4 +270,17 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 		// no change in selection (example: entering arrow key when already at top/bottom of list)
 		log.Printf("[DEBUG] ListBox: No change in selection, current item remains %d", before)
 	})
+}
+
+func formatModifiedTime(modTime time.Time) string {
+	now := time.Now()
+	diff := now.Sub(modTime)
+
+	// Less than 1 day: show relative time
+	if diff < 24*time.Hour {
+		return modTime.Format("3:04PM")
+	}
+
+	// 1 week or older: show "Aug 16, 2025 12:15PM" format
+	return modTime.Format("Jan 02, 2006")
 }

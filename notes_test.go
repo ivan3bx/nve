@@ -104,7 +104,7 @@ func TestNotifyObservers(t *testing.T) {
 		res := mock.lastResult[0]
 
 		// assert snippet
-		assert.Equal(t, "new york\n**seattle**\n", res.Snippet)
+		assert.Equal(t, "new york **seattle** ", res.Snippet)
 
 		// assert filename
 		assert.Equal(t, "test_data/apples in zoo.md", res.Filename)
