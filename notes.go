@@ -25,7 +25,7 @@ type Notes struct {
 	observers []Observer
 }
 
-var DefaultDBPath = "./nve.db"
+var DefaultDBPath = ".nve/nve.db"
 
 func NewNotes(config NotesConfig) *Notes {
 	if config.Filepath == "" {
@@ -34,6 +34,17 @@ func NewNotes(config NotesConfig) *Notes {
 
 	if config.DBPath == "" {
 		config.DBPath = DefaultDBPath
+	}
+
+	// Ensure .nve directory exists
+	nveDir := filepath.Join(config.Filepath, ".nve")
+	if err := os.MkdirAll(nveDir, 0755); err != nil {
+		panic(fmt.Sprintf("Failed to create .nve directory: %v", err))
+	}
+
+	// Update DBPath to be relative to the notes directory if using default
+	if config.DBPath == DefaultDBPath {
+		config.DBPath = filepath.Join(config.Filepath, DefaultDBPath)
 	}
 
 	notes := &Notes{
