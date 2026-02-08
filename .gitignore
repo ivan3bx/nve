@@ -2,3 +2,7 @@
 dist/
 *.db
 *.log
+
+# Claude Code - ignore local settings and agent memory
+.claude/settings.local.json
+.claude/agent-memory/

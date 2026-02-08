@@ -8,13 +8,14 @@ The goal is to point 'nve' to a directory of plain-text files, and quickly searc
 
 - 2023/01/16 - Navigation, search and viewing.
 - 2023/02/22 - Saving, creating & displaying snippets
+- 2026/02/06 - Monitoring FS changes
 
 ## TODO
 
 - [x] ✅ Saving edits
 - [x] ✅ Creating new notes from search box
 - [x] ✅ Display snippet in search results
-- [ ] Monitor FS changes to incrementally update DB
+- [x] ✅ Monitor FS changes to incrementally update DB
 - [ ] Support renaming of notes (modal)
 - [ ] Colorize matching search term in content
 - [ ] Syntax highlighting for Markdown files
