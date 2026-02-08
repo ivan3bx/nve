@@ -123,11 +123,7 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 }
 
 func (n *Notes) RegisterObservers(obs ...Observer) {
-	if n.observers != nil {
-		n.observers = obs
-	} else {
-		n.observers = append(n.observers, obs...)
-	}
+	n.observers = obs
 }
 
 func (n *Notes) Notify() {

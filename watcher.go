@@ -23,15 +23,8 @@ func (n *Notes) StartWatching(drawFunc func(func())) error {
 	n.watcher = watcher
 	n.drawFunc = drawFunc
 
-	// Add root directory
-	if err := watcher.Add(n.config.Filepath); err != nil {
-		watcher.Close()
-		n.watcher = nil
-		return err
-	}
-
-	// Add subdirectories
-	filepath.Walk(n.config.Filepath, func(path string, info os.FileInfo, err error) error {
+	// Watch root and all subdirectories
+	if err := filepath.Walk(n.config.Filepath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -41,7 +34,11 @@ func (n *Notes) StartWatching(drawFunc func(func())) error {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		watcher.Close()
+		n.watcher = nil
+		return err
+	}
 
 	go n.watchLoop(watcher)
 

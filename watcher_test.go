@@ -24,9 +24,10 @@ func setupWatcherTest(t *testing.T) (*Notes, string) {
 	return n, dir
 }
 
-func TestWatcher_CreateFile(t *testing.T) {
-	n, dir := setupWatcherTest(t)
-
+// startWatching starts the watcher and returns a channel that receives
+// a value each time the watcher triggers a UI refresh.
+func startWatching(t *testing.T, n *Notes) chan struct{} {
+	t.Helper()
 	refreshed := make(chan struct{}, 1)
 	err := n.StartWatching(func(f func()) {
 		f()
@@ -36,7 +37,13 @@ func TestWatcher_CreateFile(t *testing.T) {
 		}
 	})
 	require.NoError(t, err)
-	defer n.StopWatching()
+	t.Cleanup(n.StopWatching)
+	return refreshed
+}
+
+func TestWatcher_CreateFile(t *testing.T) {
+	n, dir := setupWatcherTest(t)
+	refreshed := startWatching(t, n)
 
 	// Create a new .md file
 	testFile := filepath.Join(dir, "new_note.md")
@@ -70,16 +77,7 @@ func TestWatcher_DeleteFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 
-	refreshed := make(chan struct{}, 1)
-	err = n.StartWatching(func(f func()) {
-		f()
-		select {
-		case refreshed <- struct{}{}:
-		default:
-		}
-	})
-	require.NoError(t, err)
-	defer n.StopWatching()
+	refreshed := startWatching(t, n)
 
 	// Delete the file
 	require.NoError(t, os.Remove(testFile))
@@ -99,17 +97,7 @@ func TestWatcher_DeleteFile(t *testing.T) {
 
 func TestWatcher_IgnoresUnsupportedTypes(t *testing.T) {
 	n, dir := setupWatcherTest(t)
-
-	refreshed := make(chan struct{}, 1)
-	err := n.StartWatching(func(f func()) {
-		f()
-		select {
-		case refreshed <- struct{}{}:
-		default:
-		}
-	})
-	require.NoError(t, err)
-	defer n.StopWatching()
+	refreshed := startWatching(t, n)
 
 	// Create an unsupported file type
 	pngFile := filepath.Join(dir, "image.png")

@@ -63,10 +63,6 @@ func NewTUIHarness(t *testing.T, seedFiles map[string]string) *TUIHarness {
 		}
 	}
 
-	// Remove stale DB/log files
-	os.Remove(filepath.Join(dir, "nve.db"))
-	os.Remove(filepath.Join(dir, "nve-debug.log"))
-
 	// Use test name as tmux session name (sanitized)
 	session := strings.ReplaceAll(t.Name(), "/", "-")
 

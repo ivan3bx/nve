@@ -65,11 +65,11 @@ func (b *ContentBox) RefreshFile() {
 // flushRefresh reloads the current file from disk if a refresh is pending
 // and the content actually changed. Called when ContentBox loses focus.
 func (b *ContentBox) flushRefresh() {
+	defer func() { b.pendingRefresh = false }()
+
 	if !b.pendingRefresh || b.currentFile == nil {
-		b.pendingRefresh = false
 		return
 	}
-	b.pendingRefresh = false
 	diskContent := GetContent(b.currentFile.Filename)
 	if diskContent != b.GetText() {
 		b.SetText(diskContent, false)

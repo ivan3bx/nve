@@ -14,16 +14,9 @@ func TestTUI_AppStartsWithFiles(t *testing.T) {
 		"beta.md":  "Beta content here",
 	})
 
-	screen := h.WaitFor(func(s string) bool {
+	h.WaitFor(func(s string) bool {
 		return strings.Contains(s, "alpha") && strings.Contains(s, "beta")
 	}, 5*time.Second)
-
-	if !strings.Contains(screen, "alpha") {
-		t.Errorf("expected 'alpha' in list, got:\n%s", screen)
-	}
-	if !strings.Contains(screen, "beta") {
-		t.Errorf("expected 'beta' in list, got:\n%s", screen)
-	}
 }
 
 func TestTUI_EditAndSave(t *testing.T) {
