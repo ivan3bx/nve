@@ -129,6 +129,37 @@ func TestTUI_ExternalEditWhileViewing(t *testing.T) {
 	}, 5*time.Second)
 }
 
+func TestTUI_CreateNewNote(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"existing.md": "some content",
+	})
+
+	// Wait for app to be ready with existing file
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "existing")
+	}, 5*time.Second)
+
+	// Type a name that doesn't match any file, then hit Enter
+	h.SendKeys("m", "y", "n", "e", "w", "n", "o", "t", "e", "Enter")
+
+	// Should land in ContentBox with a new empty file
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "mynewnote")
+	}, 5*time.Second)
+
+	// Type some content
+	h.SendKeys("h", "e", "l", "l", "o")
+
+	// Wait for save
+	time.Sleep(1 * time.Second)
+
+	// Verify the file was created on disk
+	content := h.ReadFile("mynewnote.md")
+	if !strings.Contains(content, "hello") {
+		t.Errorf("expected 'hello' in new file, got: %s", content)
+	}
+}
+
 func TestTUI_SelfEditNoContentClearing(t *testing.T) {
 	h := NewTUIHarness(t, map[string]string{
 		"stable.md": "initial text",

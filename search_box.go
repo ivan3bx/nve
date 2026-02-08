@@ -47,19 +47,17 @@ func NewSearchBox(listView *ListBox, contentView *ContentBox, notes *Notes) *Sea
 		SetTitleAlign(tview.AlignLeft)
 
 	res.SetDoneFunc(func(key tcell.Key) {
-		switch key {
-		case tcell.KeyEnter:
-			if len(notes.LastSearchResults) == 0 {
-				newNote, err := notes.CreateNote(res.GetText())
-
-				if err != nil {
-					log.Println("Error creating new note")
-					break
-				}
-
-				notes.Search(newNote.DisplayName())
-			}
+		if key != tcell.KeyEnter || len(notes.LastSearchResults) > 0 {
+			return
 		}
+
+		newNote, err := notes.CreateNote(res.GetText())
+		if err != nil {
+			log.Println("Error creating new note:", err)
+			return
+		}
+
+		notes.Search(newNote.DisplayName())
 	})
 
 	return &res
@@ -123,9 +121,16 @@ func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		// Handle special keys first
 		switch event.Key() {
 		case tcell.KeyEnter:
-			if sb.GetText() != "" {
-				setFocus(sb.contentView)
+			if sb.GetText() == "" {
+				return
 			}
+			if len(sb.notes.LastSearchResults) == 0 {
+				// No matches — create a new note, then focus ContentBox
+				if handler := sb.InputField.InputHandler(); handler != nil {
+					handler(event, setFocus)
+				}
+			}
+			setFocus(sb.contentView)
 			return
 		case tcell.KeyDown, tcell.KeyCtrlN:
 			sb.handleArrowKey(event, setFocus, true)
