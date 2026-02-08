@@ -2,6 +2,7 @@ package nve
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,6 +24,8 @@ type Notes struct {
 	config    NotesConfig
 	db        *DB
 	observers []Observer
+	watcher   io.Closer
+	drawFunc  func(func())
 }
 
 var DefaultDBPath = "./nve.db"
@@ -41,10 +44,11 @@ func NewNotes(config NotesConfig) *Notes {
 		db:     MustOpen(config.DBPath),
 	}
 
-	if err := notes.Refresh(); err != nil {
+	if _, err := notes.Refresh(); err != nil {
 		panic(err)
 	}
 
+	notes.Search("")
 	return notes
 }
 
@@ -132,13 +136,16 @@ func (n *Notes) Notify() {
 	}
 }
 
-func (n *Notes) Refresh() error {
+// Refresh syncs the database with files on disk. Returns true if any
+// changes were made (files added, updated, or pruned).
+func (n *Notes) Refresh() (bool, error) {
 	var db = n.db
+	changed := false
 
 	// Get all files currently on disk
 	files, err := scanDirectory(n.config.Filepath)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Create a map of existing files for quick lookup
@@ -150,7 +157,7 @@ func (n *Notes) Refresh() error {
 	// Get all files currently in the database
 	dbFiles, err := db.GetAllFileRefs()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Prune files from database that no longer exist on disk
@@ -165,8 +172,9 @@ func (n *Notes) Refresh() error {
 	if len(refsToPrune) > 0 {
 		if err := db.PruneFileRefs(refsToPrune); err != nil {
 			logger.Printf("Error pruning files from database: %v", err)
-			return err
+			return false, err
 		}
+		changed = true
 	}
 
 	// Process files that exist on disk (existing logic)
@@ -187,14 +195,14 @@ func (n *Notes) Refresh() error {
 
 		bytes, err := os.ReadFile(file)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		if err := db.Upsert(&ref, bytes); err != nil {
-			return err
+			return false, err
 		}
+		changed = true
 	}
 
-	n.Search("")
-	return nil
+	return changed, nil
 }

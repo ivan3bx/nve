@@ -33,6 +33,11 @@ func main() {
 	notes.RegisterObservers(listBox)
 	notes.Notify()
 
+	if err := notes.StartWatching(func(f func()) { app.QueueUpdateDraw(f) }); err != nil {
+		log.Printf("[WARN] filesystem watcher not available: %v", err)
+	}
+	defer notes.StopWatching()
+
 	// global input events
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Key() {
