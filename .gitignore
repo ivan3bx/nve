@@ -2,6 +2,9 @@
 dist/
 *.db
 *.log
+.DS_Store
+
+.conductor
 
 # Claude Code - ignore local settings and agent memory
 .claude/settings.local.json
