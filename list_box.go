@@ -44,6 +44,10 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 	box.SetSelectedFocusOnly(false)
 
 	box.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		if box.contentView.HasFocus() {
+			box.contentView.RefreshFile()
+			return
+		}
 		if (!box.HasFocus() && notes.LastQuery == "") || len(notes.LastSearchResults) == 0 {
 			box.contentView.Clear()
 		} else {
@@ -87,7 +91,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 
 	b.SetSelectedFocusOnly(emptyQuery)
 
-	if len(lastResult) == 0 {
+	if len(lastResult) == 0 && !b.contentView.HasFocus() {
 		b.contentView.Clear()
 	}
 

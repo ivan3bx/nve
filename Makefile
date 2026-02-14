@@ -24,6 +24,10 @@ build-local:
 test:
 	go test ./... --tags=fts5 --count=1
 
+.PHONY: test-tui
+test-tui:
+	go test --tags="fts5 integration" -run TestTUI --count=1 -v
+
 .PHONY: release-local
 release-local:
 	goreleaser release --snapshot --rm-dist -f .goreleaser.yml

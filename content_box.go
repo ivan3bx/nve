@@ -13,8 +13,9 @@ import (
 
 type ContentBox struct {
 	*tview.TextArea
-	debounce    func(func())
-	currentFile *FileRef
+	debounce       func(func())
+	currentFile    *FileRef
+	pendingRefresh bool
 }
 
 func NewContentBox() *ContentBox {
@@ -36,6 +37,10 @@ func NewContentBox() *ContentBox {
 			textArea.Blur()
 		}
 	})
+
+	textArea.SetBlurFunc(func() {
+		textArea.flushRefresh()
+	})
 	return &textArea
 }
 
@@ -47,6 +52,28 @@ func (b *ContentBox) Clear() {
 func (b *ContentBox) SetFile(f *FileRef) {
 	b.currentFile = f
 	b.SetText(GetContent(f.Filename), false)
+}
+
+// RefreshFile marks that the file may have changed on disk. The actual
+// reload is deferred until the user leaves the editor (via flushRefresh)
+// because calling SetText on a focused TextArea corrupts tview's
+// internal cursor state and causes panics.
+func (b *ContentBox) RefreshFile() {
+	b.pendingRefresh = true
+}
+
+// flushRefresh reloads the current file from disk if a refresh is pending
+// and the content actually changed. Called when ContentBox loses focus.
+func (b *ContentBox) flushRefresh() {
+	defer func() { b.pendingRefresh = false }()
+
+	if !b.pendingRefresh || b.currentFile == nil {
+		return
+	}
+	diskContent := GetContent(b.currentFile.Filename)
+	if diskContent != b.GetText() {
+		b.SetText(diskContent, false)
+	}
 }
 
 // InputHandler overrides default handling to switch focus away from search box when necessary.
@@ -99,8 +126,12 @@ func (b *ContentBox) mapSpecialKeys(event *tcell.EventKey) *tcell.EventKey {
 }
 
 func (b *ContentBox) queueSave(content string) {
+	if b.currentFile == nil {
+		return
+	}
+	filename := b.currentFile.Filename
 	b.debounce(func() {
-		err := SaveContent(b.currentFile.Filename, content)
+		err := SaveContent(filename, content)
 
 		if err != nil {
 			log.Println("Error saving content:", err)
