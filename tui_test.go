@@ -3,9 +3,13 @@
 package nve
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 func TestTUI_AppStartsWithFiles(t *testing.T) {
@@ -190,4 +194,79 @@ func TestTUI_SelfEditNoContentClearing(t *testing.T) {
 	if !strings.Contains(screen, "xyz") {
 		t.Errorf("expected 'xyz' still visible, got:\n%s", screen)
 	}
+}
+
+func TestTUI_SearchHighlightsContent(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha.md": "The food fight was fantastic",
+	})
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	// contentLine returns the line from the Content pane (single-line border │)
+	// that contains the file text, skipping the ListBox snippet (contains "alpha")
+	// and the SearchBox (double-line border ║).
+	contentLine := func(screen string) string {
+		for _, line := range strings.Split(screen, "\n") {
+			hasContent := strings.Contains(line, "food") || strings.Contains(line, "fight")
+			isListRow := strings.Contains(line, "alpha")
+			isSearchBox := strings.Contains(line, "║")
+			if hasContent && !isListRow && !isSearchBox {
+				return line
+			}
+		}
+		return ""
+	}
+
+	// Derive the ANSI SGR background escape from the HighlightBackground constant.
+	// tcell's first 16 named colors (ColorBlack..ColorWhite) map to SGR codes:
+	//   indices 0-7  → bg 40-47
+	//   indices 8-15 → bg 100-107
+	colorIndex := int(HighlightBackground - tcell.ColorBlack)
+	var sgrBg int
+	if colorIndex < 8 {
+		sgrBg = 40 + colorIndex
+	} else {
+		sgrBg = 100 + (colorIndex - 8)
+	}
+	highlightBgEsc := fmt.Sprintf("\x1b[%dm", sgrBg)
+
+	// hasHighlight reports whether word appears with the highlight background SGR code.
+	hasHighlight := func(line, word string) bool {
+		pat := regexp.QuoteMeta(highlightBgEsc) + `[^\x1b]*` + regexp.QuoteMeta(word)
+		return regexp.MustCompile(pat).MatchString(line)
+	}
+
+	// Search for "foo" — expect "foo" highlighted yellow in the content pane
+	h.SendKeys("f", "o", "o")
+
+	screen := h.WaitForWithColors(func(s string) bool {
+		line := contentLine(s)
+		return line != "" && hasHighlight(line, "foo")
+	}, 5*time.Second)
+
+	// Non-matched words must not be yellow
+	line := contentLine(screen)
+	if hasHighlight(line, "The") {
+		t.Errorf("non-matched word 'The' should not be yellow, got:\n%s", line)
+	}
+
+	// Narrow search to "food" — expect "food" highlighted
+	h.SendKeys("d")
+
+	h.WaitForWithColors(func(s string) bool {
+		line := contentLine(s)
+		return line != "" && hasHighlight(line, "food")
+	}, 3*time.Second)
+
+	// Clear search — expect no yellow highlighting in the content pane.
+	// With an empty query the content pane may be empty, which also satisfies this.
+	h.SendKeys("BSpace", "BSpace", "BSpace", "BSpace")
+
+	h.WaitForWithColors(func(s string) bool {
+		line := contentLine(s)
+		return line == "" || !strings.Contains(line, highlightBgEsc)
+	}, 3*time.Second)
 }

@@ -118,6 +118,37 @@ func (h *TUIHarness) Capture() string {
 	return string(out)
 }
 
+// CaptureWithColors returns the current tmux pane content with ANSI escape sequences preserved.
+func (h *TUIHarness) CaptureWithColors() string {
+	h.t.Helper()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	cmd := exec.Command("tmux", "capture-pane", "-t", h.session, "-p", "-e")
+	out, err := cmd.Output()
+	if err != nil {
+		h.t.Fatalf("CaptureWithColors failed: %v", err)
+	}
+	return string(out)
+}
+
+// WaitForWithColors polls the screen every 200ms (with ANSI colors) until predicate returns true or timeout is reached.
+func (h *TUIHarness) WaitForWithColors(predicate func(screen string) bool, timeout time.Duration) string {
+	h.t.Helper()
+	deadline := time.Now().Add(timeout)
+	var screen string
+	for time.Now().Before(deadline) {
+		screen = h.CaptureWithColors()
+		if predicate(screen) {
+			return screen
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	h.t.Logf("WaitForWithColors timeout — final screen:\n%s", screen)
+	h.t.Fatalf("WaitForWithColors timed out after %v", timeout)
+	return screen
+}
+
 // WaitFor polls the screen every 200ms until predicate returns true or timeout is reached.
 // Returns the final captured screen. Fails the test on timeout.
 func (h *TUIHarness) WaitFor(predicate func(screen string) bool, timeout time.Duration) string {
