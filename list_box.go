@@ -82,6 +82,8 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 }
 
 func (b *ListBox) SearchResultsUpdate(notes *Notes) {
+	b.contentView.SetSearchQuery(notes.LastQuery)
+
 	emptyQuery := notes.LastQuery == ""
 	lastResult := notes.LastSearchResults
 

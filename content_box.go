@@ -2,6 +2,7 @@ package nve
 
 import (
 	"log"
+	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -11,11 +12,17 @@ import (
 	"github.com/rivo/tview"
 )
 
+const (
+	HighlightBackground = tcell.ColorYellow
+	HighlightForeground = tcell.ColorBlack
+)
+
 type ContentBox struct {
 	*tview.TextArea
 	debounce       func(func())
 	currentFile    *FileRef
 	pendingRefresh bool
+	searchQuery    string
 }
 
 func NewContentBox() *ContentBox {
@@ -73,6 +80,49 @@ func (b *ContentBox) flushRefresh() {
 	diskContent := GetContent(b.currentFile.Filename)
 	if diskContent != b.GetText() {
 		b.SetText(diskContent, false)
+	}
+}
+
+// SetSearchQuery updates the current search query used for highlighting.
+func (b *ContentBox) SetSearchQuery(query string) {
+	b.searchQuery = query
+}
+
+// Draw renders the text area and then highlights any occurrences of the search query.
+func (b *ContentBox) Draw(screen tcell.Screen) {
+	b.TextArea.Draw(screen)
+
+	if b.searchQuery == "" {
+		return
+	}
+
+	x, y, width, height := b.GetInnerRect()
+	query := strings.ToLower(b.searchQuery)
+
+	for row := y; row < y+height; row++ {
+		// Build the visible line from screen cells
+		runes := make([]rune, width)
+		for col := 0; col < width; col++ {
+			mainc, _, _, _ := screen.GetContent(x+col, row)
+			runes[col] = mainc
+		}
+		line := strings.ToLower(string(runes))
+
+		// Find all occurrences of the query in this line
+		offset := 0
+		for {
+			idx := strings.Index(line[offset:], query)
+			if idx < 0 {
+				break
+			}
+			matchStart := offset + idx
+			for i := 0; i < len(query); i++ {
+				cx := x + matchStart + i
+				mainc, combc, style, _ := screen.GetContent(cx, row)
+				screen.SetContent(cx, row, mainc, combc, style.Background(HighlightBackground).Foreground(HighlightForeground).Bold(true))
+			}
+			offset = matchStart + len(query)
+		}
 	}
 }
 
