@@ -6,7 +6,7 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-// mockScreen writes text into a simulated screen so we can test highlighting.
+// setupScreen writes text into a simulated screen so we can test highlighting.
 func setupScreen(t *testing.T, width, height int, lines []string) tcell.SimulationScreen {
 	t.Helper()
 	screen := tcell.NewSimulationScreen("")
@@ -52,15 +52,15 @@ func TestMarkdown_Headings(t *testing.T) {
 		line      string
 		wantColor tcell.Color
 	}{
-		{"heading1", "# Hello World", mdHeading1Color},
-		{"heading2", "## Subheading", mdHeading2Color},
-		{"heading3", "### Third Level", mdHeading3Color},
-		{"heading4", "#### Fourth Level", mdHeading3Color},
+		{"heading1", "# Hello World", Zenburn.Heading1},
+		{"heading2", "## Subheading", Zenburn.Heading2},
+		{"heading3", "### Third Level", Zenburn.Heading3},
+		{"heading4", "#### Fourth Level", Zenburn.Heading3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			screen := setupScreen(t, 40, 1, []string{tt.line})
-			applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+			applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 			if fg := getFg(screen, 0, 0); fg != tt.wantColor {
 				t.Errorf("color: got %v, want %v", fg, tt.wantColor)
 			}
@@ -78,19 +78,19 @@ func TestMarkdown_CodeFence(t *testing.T) {
 		"```",
 	}
 	screen := setupScreen(t, 40, 3, lines)
-	applyMarkdownHighlighting(screen, 0, 0, 40, 3, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 3, false, Zenburn)
 
 	// Fence line should be code color
-	if fg := getFg(screen, 0, 0); fg != mdInlineCodeColor {
-		t.Errorf("code fence color: got %v, want %v", fg, mdInlineCodeColor)
+	if fg := getFg(screen, 0, 0); fg != Zenburn.InlineCode {
+		t.Errorf("code fence color: got %v, want %v", fg, Zenburn.InlineCode)
 	}
 	// Content inside fence should be code color
-	if fg := getFg(screen, 0, 1); fg != mdInlineCodeColor {
-		t.Errorf("code block content color: got %v, want %v", fg, mdInlineCodeColor)
+	if fg := getFg(screen, 0, 1); fg != Zenburn.InlineCode {
+		t.Errorf("code block content color: got %v, want %v", fg, Zenburn.InlineCode)
 	}
 	// Closing fence should be code color
-	if fg := getFg(screen, 0, 2); fg != mdInlineCodeColor {
-		t.Errorf("closing fence color: got %v, want %v", fg, mdInlineCodeColor)
+	if fg := getFg(screen, 0, 2); fg != Zenburn.InlineCode {
+		t.Errorf("closing fence color: got %v, want %v", fg, Zenburn.InlineCode)
 	}
 }
 
@@ -101,30 +101,30 @@ func TestMarkdown_CodeFenceStartInside(t *testing.T) {
 	}
 	screen := setupScreen(t, 40, 2, lines)
 	// Start inside a code block (fence was above visible area)
-	applyMarkdownHighlighting(screen, 0, 0, 40, 2, true)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 2, true, Zenburn)
 
 	// First line should be code color (we're inside a code block)
-	if fg := getFg(screen, 0, 0); fg != mdInlineCodeColor {
-		t.Errorf("in-code-block content: got %v, want %v", fg, mdInlineCodeColor)
+	if fg := getFg(screen, 0, 0); fg != Zenburn.InlineCode {
+		t.Errorf("in-code-block content: got %v, want %v", fg, Zenburn.InlineCode)
 	}
 }
 
 func TestMarkdown_Bold(t *testing.T) {
 	screen := setupScreen(t, 40, 1, []string{"some **bold** text"})
-	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 
 	// "b" in "bold" is at index 7
 	if !isBold(screen, 7, 0) {
 		t.Error("bold text should have bold attribute")
 	}
-	if fg := getFg(screen, 7, 0); fg != mdBoldColor {
-		t.Errorf("bold color: got %v, want %v", fg, mdBoldColor)
+	if fg := getFg(screen, 7, 0); fg != Zenburn.Bold {
+		t.Errorf("bold color: got %v, want %v", fg, Zenburn.Bold)
 	}
 }
 
 func TestMarkdown_Italic(t *testing.T) {
 	screen := setupScreen(t, 40, 1, []string{"some *italic* text"})
-	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 
 	// "i" in "italic" is at index 6
 	if !isItalic(screen, 6, 0) {
@@ -134,34 +134,34 @@ func TestMarkdown_Italic(t *testing.T) {
 
 func TestMarkdown_InlineCode(t *testing.T) {
 	screen := setupScreen(t, 40, 1, []string{"use `code` here"})
-	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 
 	// "c" in "code" is at index 5
-	if fg := getFg(screen, 5, 0); fg != mdInlineCodeColor {
-		t.Errorf("inline code color: got %v, want %v", fg, mdInlineCodeColor)
+	if fg := getFg(screen, 5, 0); fg != Zenburn.InlineCode {
+		t.Errorf("inline code color: got %v, want %v", fg, Zenburn.InlineCode)
 	}
 }
 
 func TestMarkdown_Link(t *testing.T) {
 	screen := setupScreen(t, 50, 1, []string{"click [here](http://example.com) now"})
-	applyMarkdownHighlighting(screen, 0, 0, 50, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 50, 1, false, Zenburn)
 
 	// "h" in "here" at index 7
-	if fg := getFg(screen, 7, 0); fg != mdLinkTextColor {
-		t.Errorf("link text color: got %v, want %v", fg, mdLinkTextColor)
+	if fg := getFg(screen, 7, 0); fg != Zenburn.LinkText {
+		t.Errorf("link text color: got %v, want %v", fg, Zenburn.LinkText)
 	}
 	// "h" in "http" at index 14
-	if fg := getFg(screen, 14, 0); fg != mdLinkURLColor {
-		t.Errorf("link URL color: got %v, want %v", fg, mdLinkURLColor)
+	if fg := getFg(screen, 14, 0); fg != Zenburn.LinkURL {
+		t.Errorf("link URL color: got %v, want %v", fg, Zenburn.LinkURL)
 	}
 }
 
 func TestMarkdown_ListMarker(t *testing.T) {
 	screen := setupScreen(t, 40, 1, []string{"- list item"})
-	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 
-	if fg := getFg(screen, 0, 0); fg != mdListMarkerColor {
-		t.Errorf("list marker color: got %v, want %v", fg, mdListMarkerColor)
+	if fg := getFg(screen, 0, 0); fg != Zenburn.ListMarker {
+		t.Errorf("list marker color: got %v, want %v", fg, Zenburn.ListMarker)
 	}
 	if !isBold(screen, 0, 0) {
 		t.Error("list marker should be bold")
@@ -170,16 +170,16 @@ func TestMarkdown_ListMarker(t *testing.T) {
 
 func TestMarkdown_Blockquote(t *testing.T) {
 	screen := setupScreen(t, 40, 1, []string{"> quoted text"})
-	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 
-	if fg := getFg(screen, 0, 0); fg != mdBlockquoteColor {
-		t.Errorf("blockquote color: got %v, want %v", fg, mdBlockquoteColor)
+	if fg := getFg(screen, 0, 0); fg != Zenburn.Blockquote {
+		t.Errorf("blockquote color: got %v, want %v", fg, Zenburn.Blockquote)
 	}
 }
 
 func TestMarkdown_PlainTextUnchanged(t *testing.T) {
 	screen := setupScreen(t, 40, 1, []string{"just plain text"})
-	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false)
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
 
 	// Plain text should retain default style
 	_, _, style, _ := screen.GetContent(0, 0)

@@ -99,7 +99,7 @@ func (b *ContentBox) Draw(screen tcell.Screen) {
 	// Apply markdown highlighting before search highlighting
 	if b.isMarkdown() {
 		inCodeBlock := b.codeBlockStateAtVisibleTop(screen, x, y, width)
-		applyMarkdownHighlighting(screen, x, y, width, height, inCodeBlock)
+		applyMarkdownHighlighting(screen, x, y, width, height, inCodeBlock, Zenburn)
 	}
 
 	if b.searchQuery == "" {

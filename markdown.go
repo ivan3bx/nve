@@ -6,23 +6,37 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
-// Zenburn-inspired markdown color palette (256-color terminal palette indices).
-var (
-	mdHeading1Color   = tcell.PaletteColor(187) // pale yellow
-	mdHeading2Color   = tcell.PaletteColor(186) // olive-yellow
-	mdHeading3Color   = tcell.PaletteColor(150) // muted green
-	mdBoldColor       = tcell.PaletteColor(253) // light gray
-	mdItalicColor     = tcell.PaletteColor(253) // light gray
-	mdInlineCodeColor = tcell.PaletteColor(223) // peachy/tan
-	mdLinkTextColor   = tcell.PaletteColor(174) // muted rose
-	mdLinkURLColor    = tcell.PaletteColor(67)  // muted blue
-	mdListMarkerColor = tcell.PaletteColor(187) // pale yellow
-	mdBlockquoteColor = tcell.PaletteColor(108) // sage green
-)
+// MarkdownStyle defines the color palette for markdown syntax highlighting.
+type MarkdownStyle struct {
+	Heading1   tcell.Color
+	Heading2   tcell.Color
+	Heading3   tcell.Color
+	Bold       tcell.Color
+	Italic     tcell.Color
+	InlineCode tcell.Color
+	LinkText   tcell.Color
+	LinkURL    tcell.Color
+	ListMarker tcell.Color
+	Blockquote tcell.Color
+}
+
+// Zenburn is a low-contrast color scheme using muted, earthy tones (256-color palette).
+var Zenburn = MarkdownStyle{
+	Heading1:   tcell.PaletteColor(187), // pale yellow
+	Heading2:   tcell.PaletteColor(186), // olive-yellow
+	Heading3:   tcell.PaletteColor(150), // muted green
+	Bold:       tcell.PaletteColor(253), // light gray
+	Italic:     tcell.PaletteColor(253), // light gray
+	InlineCode: tcell.PaletteColor(223), // peachy/tan
+	LinkText:   tcell.PaletteColor(174), // muted rose
+	LinkURL:    tcell.PaletteColor(67),  // muted blue
+	ListMarker: tcell.PaletteColor(187), // pale yellow
+	Blockquote: tcell.PaletteColor(108), // sage green
+}
 
 // applyMarkdownHighlighting processes visible screen rows and applies
-// zenburn-style coloring to markdown syntax elements.
-func applyMarkdownHighlighting(screen tcell.Screen, x, y, width, height int, inCodeBlock bool) {
+// style-based coloring to markdown syntax elements.
+func applyMarkdownHighlighting(screen tcell.Screen, x, y, width, height int, inCodeBlock bool, style MarkdownStyle) {
 	for row := 0; row < height; row++ {
 		line := extractLine(screen, x, y+row, width)
 		trimmed := strings.TrimLeft(line, " ")
@@ -30,61 +44,61 @@ func applyMarkdownHighlighting(screen tcell.Screen, x, y, width, height int, inC
 
 		// Code fence toggle
 		if strings.HasPrefix(trimmed, "```") {
-			colorRange(screen, x, y+row, 0, width, mdInlineCodeColor, false, false)
+			colorRange(screen, x, y+row, 0, width, style.InlineCode, false, false)
 			inCodeBlock = !inCodeBlock
 			continue
 		}
 
 		// Inside code block
 		if inCodeBlock {
-			colorRange(screen, x, y+row, 0, width, mdInlineCodeColor, false, false)
+			colorRange(screen, x, y+row, 0, width, style.InlineCode, false, false)
 			continue
 		}
 
 		// Headings
 		if strings.HasPrefix(trimmed, "# ") {
-			colorRange(screen, x, y+row, 0, width, mdHeading1Color, true, false)
+			colorRange(screen, x, y+row, 0, width, style.Heading1, true, false)
 			continue
 		}
 		if strings.HasPrefix(trimmed, "## ") {
-			colorRange(screen, x, y+row, 0, width, mdHeading2Color, true, false)
+			colorRange(screen, x, y+row, 0, width, style.Heading2, true, false)
 			continue
 		}
 		if strings.HasPrefix(trimmed, "### ") || strings.HasPrefix(trimmed, "#### ") ||
 			strings.HasPrefix(trimmed, "##### ") || strings.HasPrefix(trimmed, "###### ") {
-			colorRange(screen, x, y+row, 0, width, mdHeading3Color, true, false)
+			colorRange(screen, x, y+row, 0, width, style.Heading3, true, false)
 			continue
 		}
 
 		// Blockquote
 		if strings.HasPrefix(trimmed, "> ") || trimmed == ">" {
-			colorRange(screen, x, y+row, 0, width, mdBlockquoteColor, false, false)
+			colorRange(screen, x, y+row, 0, width, style.Blockquote, false, false)
 			continue
 		}
 
 		// List markers: "- " or "* " at line start (with optional indent)
 		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
-			colorRange(screen, x, y+row, indent, indent+2, mdListMarkerColor, true, false)
+			colorRange(screen, x, y+row, indent, indent+2, style.ListMarker, true, false)
 		}
 
 		// Inline patterns
-		applyInlineHighlighting(screen, x, y+row, line)
+		applyInlineHighlighting(screen, x, y+row, line, style)
 	}
 }
 
 // applyInlineHighlighting applies bold, italic, inline code, and link styles within a line.
-func applyInlineHighlighting(screen tcell.Screen, x, row int, line string) {
+func applyInlineHighlighting(screen tcell.Screen, x, row int, line string, style MarkdownStyle) {
 	// Inline code: `text`
-	highlightDelimited(screen, x, row, line, "`", "`", mdInlineCodeColor, false, false)
+	highlightDelimited(screen, x, row, line, "`", "`", style.InlineCode, false, false)
 
 	// Bold: **text**
-	highlightDelimited(screen, x, row, line, "**", "**", mdBoldColor, true, false)
+	highlightDelimited(screen, x, row, line, "**", "**", style.Bold, true, false)
 
 	// Italic: *text* (skip if preceded by *)
-	applyItalicHighlighting(screen, x, row, line)
+	applyItalicHighlighting(screen, x, row, line, style)
 
 	// Links: [text](url)
-	applyLinkHighlighting(screen, x, row, line)
+	applyLinkHighlighting(screen, x, row, line, style)
 }
 
 // highlightDelimited finds pairs of start/end delimiters and colors the content between them.
@@ -113,7 +127,7 @@ func highlightDelimited(screen tcell.Screen, x, row int, line, startDelim, endDe
 }
 
 // applyItalicHighlighting handles *text* while avoiding **bold** markers.
-func applyItalicHighlighting(screen tcell.Screen, x, row int, line string) {
+func applyItalicHighlighting(screen tcell.Screen, x, row int, line string, style MarkdownStyle) {
 	offset := 0
 	for {
 		start := strings.Index(line[offset:], "*")
@@ -149,13 +163,13 @@ func applyItalicHighlighting(screen tcell.Screen, x, row int, line string) {
 			continue
 		}
 
-		colorRange(screen, x, row, start, end+1, mdItalicColor, false, true)
+		colorRange(screen, x, row, start, end+1, style.Italic, false, true)
 		offset = end + 1
 	}
 }
 
 // applyLinkHighlighting handles [text](url) patterns.
-func applyLinkHighlighting(screen tcell.Screen, x, row int, line string) {
+func applyLinkHighlighting(screen tcell.Screen, x, row int, line string, style MarkdownStyle) {
 	offset := 0
 	for {
 		bracketOpen := strings.Index(line[offset:], "[")
@@ -177,10 +191,10 @@ func applyLinkHighlighting(screen tcell.Screen, x, row int, line string) {
 		parenClose += bracketClose + 2
 
 		// [text] in rose
-		colorRange(screen, x, row, bracketOpen, bracketClose+1, mdLinkTextColor, false, false)
+		colorRange(screen, x, row, bracketOpen, bracketClose+1, style.LinkText, false, false)
 		// ](url) in blue underline
 		modifyStyleRange(screen, x, row, bracketClose+1, parenClose+1, func(s tcell.Style) tcell.Style {
-			return s.Foreground(mdLinkURLColor).Underline(true)
+			return s.Foreground(style.LinkURL).Underline(true)
 		})
 
 		offset = parenClose + 1
