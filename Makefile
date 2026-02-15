@@ -28,6 +28,12 @@ test:
 test-tui:
 	go test --tags="fts5 integration" -run TestTUI --count=1 -v
 
+.PHONY: test-docker
+test-docker:
+	docker build -f Dockerfile.ci -t nve-ci .
+	docker run --rm nve-ci make test
+	docker run --rm nve-ci make test-tui
+
 .PHONY: release-local
 release-local:
 	goreleaser release --snapshot --rm-dist -f .goreleaser.yml

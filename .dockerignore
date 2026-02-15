@@ -1,0 +1,5 @@
+dist/
+nve.db
+nve-debug.log
+.git/
+.conductor/

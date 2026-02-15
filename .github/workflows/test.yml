@@ -1,0 +1,21 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build test image
+        run: docker build -f Dockerfile.ci -t nve-ci .
+
+      - name: Run unit tests
+        run: docker run --rm nve-ci make test
+
+      - name: Run TUI tests
+        run: docker run --rm nve-ci make test-tui
