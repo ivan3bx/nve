@@ -98,7 +98,7 @@ func (b *ContentBox) Draw(screen tcell.Screen) {
 
 	// Apply markdown highlighting before search highlighting
 	if b.isMarkdown() {
-		inCodeBlock := b.codeBlockStateAtVisibleTop(screen, x, y, width)
+		inCodeBlock := b.codeBlockStateAtVisibleTop()
 		applyMarkdownHighlighting(screen, x, y, width, height, inCodeBlock, Zenburn)
 	}
 
@@ -139,23 +139,14 @@ func (b *ContentBox) isMarkdown() bool {
 }
 
 // codeBlockStateAtVisibleTop determines whether the first visible row
-// is inside a code block by matching it to the source text and counting
-// code fences above it.
-func (b *ContentBox) codeBlockStateAtVisibleTop(screen tcell.Screen, x, y, width int) bool {
-	firstLine := strings.TrimRight(extractLine(screen, x, y, width), " \x00")
-	if firstLine == "" {
+// is inside a code block by using the TextArea's scroll offset to count
+// code fences above the visible area.
+func (b *ContentBox) codeBlockStateAtVisibleTop() bool {
+	topRow, _ := b.GetOffset()
+	if topRow <= 0 {
 		return false
 	}
-
-	fullText := b.GetText()
-	idx := strings.Index(fullText, firstLine)
-	if idx <= 0 {
-		return false
-	}
-
-	// Count code fences in text before the visible area
-	preceding := fullText[:idx]
-	return countCodeFences(preceding, strings.Count(preceding, "\n")+1)%2 == 1
+	return countCodeFences(b.GetText(), topRow)%2 == 1
 }
 
 // InputHandler overrides default handling to switch focus away from search box when necessary.
