@@ -1,19 +1,41 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/ivan3bx/nve"
 	"github.com/rivo/tview"
+	"github.com/spf13/cobra"
 )
 
-func main() {
+var rootCmd = &cobra.Command{
+	Use:   "nve [directory]",
+	Short: "A terminal-based note-taking app inspired by Notational Velocity",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  run,
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	dir := "./"
+	if len(args) == 1 {
+		dir = args[0]
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("cannot access directory %q: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%q is not a directory", dir)
+	}
+
 	// Setup debug logging to file
 	logFile, err := os.OpenFile("nve-debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
@@ -21,7 +43,7 @@ func main() {
 	var (
 		app   = tview.NewApplication()
 		notes = nve.NewNotes(nve.NotesConfig{
-			Filepath: "./",
+			Filepath: dir,
 		})
 
 		// View hierarchy
@@ -68,7 +90,11 @@ func main() {
 				AddItem(contentBox, 0, 3, false), 0, 2, true,
 		)
 
-	if err := app.SetRoot(flex, true).SetFocus(flex).EnableMouse(true).Run(); err != nil {
-		panic(err)
+	return app.SetRoot(flex, true).SetFocus(flex).EnableMouse(true).Run()
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
 	}
 }
