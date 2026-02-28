@@ -87,78 +87,106 @@ func applyMarkdownHighlighting(screen tcell.Screen, x, y, width, height int, inC
 }
 
 // applyInlineHighlighting applies bold, italic, inline code, and link styles within a line.
+// Inline code is applied last so it takes precedence (e.g., `**not bold**` stays code-styled).
+// The line is converted to []rune once so all index operations use cell coordinates.
 func applyInlineHighlighting(screen tcell.Screen, x, row int, line string, style MarkdownStyle) {
-	// Inline code: `text`
-	highlightDelimited(screen, x, row, line, "`", "`", style.InlineCode, false, false)
+	runes := []rune(line)
 
 	// Bold: **text**
-	highlightDelimited(screen, x, row, line, "**", "**", style.Bold, true, false)
+	highlightDelimited(screen, x, row, runes, "**", "**", style.Bold, true, false)
 
 	// Italic: *text* (skip if preceded by *)
-	applyItalicHighlighting(screen, x, row, line, style)
+	applyItalicHighlighting(screen, x, row, runes, style)
 
 	// Links: [text](url)
-	applyLinkHighlighting(screen, x, row, line, style)
+	applyLinkHighlighting(screen, x, row, runes, style)
+
+	// Inline code: `text` — applied last so code spans win over other styles
+	highlightDelimited(screen, x, row, runes, "`", "`", style.InlineCode, false, false)
 }
 
 // highlightDelimited finds pairs of start/end delimiters and colors the content between them.
-func highlightDelimited(screen tcell.Screen, x, row int, line, startDelim, endDelim string, fg tcell.Color, bold, italic bool) {
+// All positions are in rune (screen cell) coordinates.
+func highlightDelimited(screen tcell.Screen, x, row int, runes []rune, startDelim, endDelim string, fg tcell.Color, bold, italic bool) {
+	startRunes := []rune(startDelim)
+	endRunes := []rune(endDelim)
 	offset := 0
 	for {
-		start := strings.Index(line[offset:], startDelim)
+		start := indexRunes(runes[offset:], startRunes)
 		if start < 0 {
 			break
 		}
 		start += offset
-		searchFrom := start + len(startDelim)
-		if searchFrom >= len(line) {
+		searchFrom := start + len(startRunes)
+		if searchFrom >= len(runes) {
 			break
 		}
-		end := strings.Index(line[searchFrom:], endDelim)
+		end := indexRunes(runes[searchFrom:], endRunes)
 		if end < 0 {
 			break
 		}
 		end += searchFrom
 
 		// Color the delimiters and content
-		colorRange(screen, x, row, start, end+len(endDelim), fg, bold, italic)
-		offset = end + len(endDelim)
+		colorRange(screen, x, row, start, end+len(endRunes), fg, bold, italic)
+		offset = end + len(endRunes)
 	}
 }
 
+// indexRunes finds the first occurrence of needle in haystack, returning the rune index or -1.
+func indexRunes(haystack, needle []rune) int {
+	if len(needle) == 0 {
+		return 0
+	}
+	for i := 0; i <= len(haystack)-len(needle); i++ {
+		match := true
+		for j := range needle {
+			if haystack[i+j] != needle[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
 // applyItalicHighlighting handles *text* while avoiding **bold** markers.
-func applyItalicHighlighting(screen tcell.Screen, x, row int, line string, style MarkdownStyle) {
+// All positions are in rune (screen cell) coordinates.
+func applyItalicHighlighting(screen tcell.Screen, x, row int, runes []rune, style MarkdownStyle) {
 	offset := 0
 	for {
-		start := strings.Index(line[offset:], "*")
+		start := indexRunes(runes[offset:], []rune{'*'})
 		if start < 0 {
 			break
 		}
 		start += offset
 
 		// Skip bold markers (**)
-		if start+1 < len(line) && line[start+1] == '*' {
+		if start+1 < len(runes) && runes[start+1] == '*' {
 			offset = start + 2
 			continue
 		}
 		// Skip if preceded by * (end of bold)
-		if start > 0 && line[start-1] == '*' {
+		if start > 0 && runes[start-1] == '*' {
 			offset = start + 1
 			continue
 		}
 
 		searchFrom := start + 1
-		if searchFrom >= len(line) {
+		if searchFrom >= len(runes) {
 			break
 		}
-		end := strings.Index(line[searchFrom:], "*")
+		end := indexRunes(runes[searchFrom:], []rune{'*'})
 		if end < 0 {
 			break
 		}
 		end += searchFrom
 
 		// Skip if followed by * (start of bold)
-		if end+1 < len(line) && line[end+1] == '*' {
+		if end+1 < len(runes) && runes[end+1] == '*' {
 			offset = end + 2
 			continue
 		}
@@ -169,22 +197,23 @@ func applyItalicHighlighting(screen tcell.Screen, x, row int, line string, style
 }
 
 // applyLinkHighlighting handles [text](url) patterns.
-func applyLinkHighlighting(screen tcell.Screen, x, row int, line string, style MarkdownStyle) {
+// All positions are in rune (screen cell) coordinates.
+func applyLinkHighlighting(screen tcell.Screen, x, row int, runes []rune, style MarkdownStyle) {
 	offset := 0
 	for {
-		bracketOpen := strings.Index(line[offset:], "[")
+		bracketOpen := indexRunes(runes[offset:], []rune{'['})
 		if bracketOpen < 0 {
 			break
 		}
 		bracketOpen += offset
 
-		bracketClose := strings.Index(line[bracketOpen+1:], "](")
+		bracketClose := indexRunes(runes[bracketOpen+1:], []rune{']', '('})
 		if bracketClose < 0 {
 			break
 		}
 		bracketClose += bracketOpen + 1
 
-		parenClose := strings.Index(line[bracketClose+2:], ")")
+		parenClose := indexRunes(runes[bracketClose+2:], []rune{')'})
 		if parenClose < 0 {
 			break
 		}
@@ -219,17 +248,10 @@ func modifyStyleRange(screen tcell.Screen, x, row, from, to int, fn func(tcell.S
 	}
 }
 
-// colorRange applies foreground color and optional bold/italic to a range of screen cells.
+// colorRange applies foreground color and explicit bold/italic to a range of screen cells.
 func colorRange(screen tcell.Screen, x, row, from, to int, fg tcell.Color, bold, italic bool) {
 	modifyStyleRange(screen, x, row, from, to, func(s tcell.Style) tcell.Style {
-		s = s.Foreground(fg)
-		if bold {
-			s = s.Bold(true)
-		}
-		if italic {
-			s = s.Italic(true)
-		}
-		return s
+		return s.Foreground(fg).Bold(bold).Italic(italic)
 	})
 }
 

@@ -188,6 +188,34 @@ func TestMarkdown_PlainTextUnchanged(t *testing.T) {
 	}
 }
 
+func TestMarkdown_InlineCodePrecedence(t *testing.T) {
+	screen := setupScreen(t, 40, 1, []string{"see `**not bold**` here"})
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
+
+	// The ** inside backticks should be styled as code, not bold
+	// "n" in "not" is at index 7
+	if fg := getFg(screen, 7, 0); fg != Zenburn.InlineCode {
+		t.Errorf("code span content should be InlineCode color, got %v, want %v", fg, Zenburn.InlineCode)
+	}
+	if isBold(screen, 7, 0) {
+		t.Error("text inside code span should not be bold")
+	}
+}
+
+func TestMarkdown_NonASCII(t *testing.T) {
+	// "café" has a multi-byte rune; bold markers should still align to screen cells
+	screen := setupScreen(t, 40, 1, []string{"café **bold** end"})
+	applyMarkdownHighlighting(screen, 0, 0, 40, 1, false, Zenburn)
+
+	// "b" in "bold" is at cell index 7 ("café **" = 7 cells: c,a,f,é, ,*,*)
+	if !isBold(screen, 7, 0) {
+		t.Error("bold text after non-ASCII should have bold attribute")
+	}
+	if fg := getFg(screen, 7, 0); fg != Zenburn.Bold {
+		t.Errorf("bold color: got %v, want %v", fg, Zenburn.Bold)
+	}
+}
+
 func TestCountCodeFences(t *testing.T) {
 	tests := []struct {
 		name    string
