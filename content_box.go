@@ -60,6 +60,9 @@ func NewContentBox(config ...*Config) *ContentBox {
 }
 
 func (b *ContentBox) Clear() {
+	if b.versioning && b.currentFile != nil {
+		b.flushAndSnapshot()
+	}
 	b.currentFile = nil
 	b.SetText("", true)
 }
@@ -88,7 +91,8 @@ func (b *ContentBox) Shutdown() {
 // latest edits even if the debounced save hasn't fired yet.
 func (b *ContentBox) flushAndSnapshot() {
 	if err := SaveContent(b.currentFile.Filename, b.GetText()); err != nil {
-		log.Printf("[WARN] flushAndSnapshot: failed to save %s: %v", b.currentFile.Filename, err)
+		log.Printf("[WARN] flushAndSnapshot: failed to save %s: %v; skipping snapshot", b.currentFile.Filename, err)
+		return
 	}
 	b.saveVersion(b.currentFile.Filename)
 }

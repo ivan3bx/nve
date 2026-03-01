@@ -78,6 +78,37 @@ func TestSetFile_SameFileDoesNotSnapshot(t *testing.T) {
 	assert.Empty(t, captured, "should not snapshot when re-selecting the same file")
 }
 
+func TestClear_VersioningEnabled_SnapshotsOutgoingFile(t *testing.T) {
+	f := tempFileRef(t, "note.md", "hello")
+
+	cb := NewContentBox()
+	cb.versioning = true
+
+	var captured []string
+	cb.saveVersion = func(path string) { captured = append(captured, path) }
+
+	cb.SetFile(f)
+	captured = nil
+
+	cb.Clear()
+	assert.Equal(t, []string{f.Filename}, captured, "should snapshot outgoing file on Clear")
+	assert.Nil(t, cb.currentFile, "currentFile should be nil after Clear")
+}
+
+func TestClear_VersioningDisabled_DoesNotSnapshot(t *testing.T) {
+	f := tempFileRef(t, "note.md", "hello")
+
+	cb := NewContentBox()
+	cb.versioning = false
+
+	called := false
+	cb.saveVersion = func(path string) { called = true }
+
+	cb.SetFile(f)
+	cb.Clear()
+	assert.False(t, called, "should not snapshot on Clear when versioning is disabled")
+}
+
 func TestShutdown_Versioning(t *testing.T) {
 	testcases := []struct {
 		name        string
