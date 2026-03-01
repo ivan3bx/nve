@@ -62,6 +62,22 @@ func TestSetFile_Versioning(t *testing.T) {
 	}
 }
 
+func TestSetFile_SameFileDoesNotSnapshot(t *testing.T) {
+	f := tempFileRef(t, "note.md", "hello")
+
+	cb := NewContentBox()
+	cb.versioning = true
+
+	var captured []string
+	cb.saveVersion = func(path string) { captured = append(captured, path) }
+
+	cb.SetFile(f)
+	cb.SetFile(f)
+	cb.SetFile(f)
+
+	assert.Empty(t, captured, "should not snapshot when re-selecting the same file")
+}
+
 func TestShutdown_Versioning(t *testing.T) {
 	testcases := []struct {
 		name        string

@@ -65,9 +65,11 @@ func (b *ContentBox) Clear() {
 }
 
 func (b *ContentBox) SetFile(f *FileRef) {
-	// Snapshot outgoing file before switching
+	// Snapshot outgoing file before switching, but only if changing files.
 	if b.versioning && b.currentFile != nil {
-		b.saveVersion(b.currentFile.Filename)
+		if f == nil || f.Filename != b.currentFile.Filename {
+			b.saveVersion(b.currentFile.Filename)
+		}
 	}
 
 	b.currentFile = f
