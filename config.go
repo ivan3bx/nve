@@ -1,6 +1,7 @@
 package nve
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -25,9 +26,14 @@ func LoadConfig() *Config {
 	path := filepath.Join(home, ".config", "nve", "config.yml")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		cfg := defaultConfig()
-		writeDefaultConfig(path, cfg)
-		return cfg
+		if errors.Is(err, os.ErrNotExist) {
+			cfg := defaultConfig()
+			writeDefaultConfig(path, cfg)
+			return cfg
+		}
+
+		log.Printf("[WARN] failed to read config %s: %v; using defaults", path, err)
+		return defaultConfig()
 	}
 
 	cfg := defaultConfig()
