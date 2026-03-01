@@ -68,7 +68,7 @@ func (b *ContentBox) SetFile(f *FileRef) {
 	// Snapshot outgoing file before switching, but only if changing files.
 	if b.versioning && b.currentFile != nil {
 		if f == nil || f.Filename != b.currentFile.Filename {
-			b.saveVersion(b.currentFile.Filename)
+			b.flushAndSnapshot()
 		}
 	}
 
@@ -79,8 +79,18 @@ func (b *ContentBox) SetFile(f *FileRef) {
 // Shutdown snapshots the current file. Called on app exit.
 func (b *ContentBox) Shutdown() {
 	if b.versioning && b.currentFile != nil {
-		b.saveVersion(b.currentFile.Filename)
+		b.flushAndSnapshot()
 	}
+}
+
+// flushAndSnapshot persists the current editor buffer to disk and then
+// registers a version snapshot. This ensures the snapshot captures the
+// latest edits even if the debounced save hasn't fired yet.
+func (b *ContentBox) flushAndSnapshot() {
+	if err := SaveContent(b.currentFile.Filename, b.GetText()); err != nil {
+		log.Printf("[WARN] flushAndSnapshot: failed to save %s: %v", b.currentFile.Filename, err)
+	}
+	b.saveVersion(b.currentFile.Filename)
 }
 
 // RefreshFile marks that the file may have changed on disk. The actual
