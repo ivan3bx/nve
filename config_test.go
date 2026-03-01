@@ -45,6 +45,10 @@ func TestLoadConfig_MalformedYAML_ReturnsDefaults(t *testing.T) {
 }
 
 func TestLoadConfig_UnreadableFile_ReturnsDefaults(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("skipping: root can read any file regardless of permissions")
+	}
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")
 
