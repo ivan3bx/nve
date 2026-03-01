@@ -24,6 +24,10 @@ func LoadConfig() *Config {
 	}
 
 	path := filepath.Join(home, ".config", "nve", "config.yml")
+	return loadConfigFrom(path)
+}
+
+func loadConfigFrom(path string) *Config {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
