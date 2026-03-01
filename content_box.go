@@ -2,6 +2,7 @@ package nve
 
 import (
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -88,25 +89,27 @@ func (b *ContentBox) SetSearchQuery(query string) {
 	b.searchQuery = query
 }
 
-// Draw renders the text area and then highlights any occurrences of the search query.
+// Draw renders the text area, applies markdown syntax highlighting for .md files,
+// and then highlights any occurrences of the search query.
 func (b *ContentBox) Draw(screen tcell.Screen) {
 	b.TextArea.Draw(screen)
+
+	x, y, width, height := b.GetInnerRect()
+
+	// Apply markdown highlighting before search highlighting
+	if b.isMarkdown() {
+		inCodeBlock := b.codeBlockStateAtVisibleTop()
+		applyMarkdownHighlighting(screen, x, y, width, height, inCodeBlock, Zenburn)
+	}
 
 	if b.searchQuery == "" {
 		return
 	}
 
-	x, y, width, height := b.GetInnerRect()
 	query := strings.ToLower(b.searchQuery)
 
 	for row := y; row < y+height; row++ {
-		// Build the visible line from screen cells
-		runes := make([]rune, width)
-		for col := 0; col < width; col++ {
-			mainc, _, _, _ := screen.GetContent(x+col, row)
-			runes[col] = mainc
-		}
-		line := strings.ToLower(string(runes))
+		line := strings.ToLower(extractLine(screen, x, row, width))
 
 		// Find all occurrences of the query in this line
 		offset := 0
@@ -124,6 +127,26 @@ func (b *ContentBox) Draw(screen tcell.Screen) {
 			offset = matchStart + len(query)
 		}
 	}
+}
+
+// isMarkdown returns true if the current file is a markdown file.
+func (b *ContentBox) isMarkdown() bool {
+	if b.currentFile == nil {
+		return false
+	}
+	ext := filepath.Ext(b.currentFile.Filename)
+	return ext == ".md" || ext == ".mdown"
+}
+
+// codeBlockStateAtVisibleTop determines whether the first visible row
+// is inside a code block by using the TextArea's scroll offset to count
+// code fences above the visible area.
+func (b *ContentBox) codeBlockStateAtVisibleTop() bool {
+	topRow, _ := b.GetOffset()
+	if topRow <= 0 {
+		return false
+	}
+	return countCodeFences(b.GetText(), topRow)%2 == 1
 }
 
 // InputHandler overrides default handling to switch focus away from search box when necessary.
