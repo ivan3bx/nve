@@ -55,6 +55,20 @@ Prefer descriptive commits listing the important changes.
 
 When addressing PR review feedback, critically evaluate each comment before applying changes. If you disagree with the feedback or believe it's incorrect, explain your reasoning and ask before making the change.
 
+### Writing Go Tests
+
+- When a test has multiple variations with the same basic setup, use a table-driven test
+- Use `testcases` as the variable name for the slice of test case structs
+- Use `tc` as the loop variable: `for _, tc := range testcases`
+- Use multi-line struct literals for each test case, with every field on its own line:
+  ```go
+  {
+      name:       "descriptive name",
+      input:      "value",
+      expectFoo:  true,
+  },
+  ```
+
 ## Architecture
 
 ### Three-Pane UI Structure

@@ -18,6 +18,9 @@ func main() {
 	defer logFile.Close()
 	log.SetOutput(logFile)
 
+	config := nve.LoadConfig()
+	log.Printf("[INFO] config: versioning=%v", config.Versioning)
+
 	var (
 		app   = tview.NewApplication()
 		notes = nve.NewNotes(nve.NotesConfig{
@@ -25,7 +28,7 @@ func main() {
 		})
 
 		// View hierarchy
-		contentBox = nve.NewContentBox()
+		contentBox = nve.NewContentBox(config)
 		listBox    = nve.NewListBox(contentBox, notes)
 		searchBox  = nve.NewSearchBox(listBox, contentBox, notes)
 	)

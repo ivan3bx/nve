@@ -24,12 +24,19 @@ type ContentBox struct {
 	currentFile    *FileRef
 	pendingRefresh bool
 	searchQuery    string
+	versioning     bool
+	saveVersion    func(string)
 }
 
-func NewContentBox() *ContentBox {
+func NewContentBox(config ...*Config) *ContentBox {
 	textArea := ContentBox{
-		TextArea: tview.NewTextArea(),
-		debounce: debounce.New(300 * time.Millisecond),
+		TextArea:    tview.NewTextArea(),
+		debounce:    debounce.New(300 * time.Millisecond),
+		saveVersion: SaveFileVersion,
+	}
+
+	if len(config) > 0 && config[0] != nil {
+		textArea.versioning = config[0].Versioning
 	}
 
 	textArea.SetBorder(true).
@@ -59,8 +66,8 @@ func (b *ContentBox) Clear() {
 
 func (b *ContentBox) SetFile(f *FileRef) {
 	// Snapshot outgoing file before switching
-	if b.currentFile != nil {
-		SaveFileVersion(b.currentFile.Filename)
+	if b.versioning && b.currentFile != nil {
+		b.saveVersion(b.currentFile.Filename)
 	}
 
 	b.currentFile = f
@@ -69,8 +76,8 @@ func (b *ContentBox) SetFile(f *FileRef) {
 
 // Shutdown snapshots the current file. Called on app exit.
 func (b *ContentBox) Shutdown() {
-	if b.currentFile != nil {
-		SaveFileVersion(b.currentFile.Filename)
+	if b.versioning && b.currentFile != nil {
+		b.saveVersion(b.currentFile.Filename)
 	}
 }
 
