@@ -23,6 +23,7 @@ type ContentBox struct {
 	debounce       func(func())
 	currentFile    *FileRef
 	pendingRefresh bool
+	dirty          bool
 	searchQuery    string
 	versioning     bool
 	saveVersion    func(string)
@@ -64,6 +65,7 @@ func (b *ContentBox) Clear() {
 		b.flushAndSnapshot()
 	}
 	b.currentFile = nil
+	b.dirty = false
 	b.SetText("", true)
 }
 
@@ -76,6 +78,7 @@ func (b *ContentBox) SetFile(f *FileRef) {
 	}
 
 	b.currentFile = f
+	b.dirty = false
 	b.SetText(GetContent(f.Filename), false)
 }
 
@@ -87,13 +90,17 @@ func (b *ContentBox) Shutdown() {
 }
 
 // flushAndSnapshot persists the current editor buffer to disk and then
-// registers a version snapshot. This ensures the snapshot captures the
-// latest edits even if the debounced save hasn't fired yet.
+// registers a version snapshot. Only acts when the user has made edits
+// (dirty flag is set), to avoid overwriting external changes.
 func (b *ContentBox) flushAndSnapshot() {
+	if !b.dirty {
+		return
+	}
 	if err := SaveContent(b.currentFile.Filename, b.GetText()); err != nil {
 		log.Printf("[WARN] flushAndSnapshot: failed to save %s: %v; skipping snapshot", b.currentFile.Filename, err)
 		return
 	}
+	b.dirty = false
 	b.saveVersion(b.currentFile.Filename)
 }
 
@@ -196,6 +203,7 @@ func (b *ContentBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		}
 
 		if after := b.GetText(); before != after {
+			b.dirty = true
 			b.queueSave(after)
 		}
 	})
