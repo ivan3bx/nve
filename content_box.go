@@ -23,13 +23,21 @@ type ContentBox struct {
 	debounce       func(func())
 	currentFile    *FileRef
 	pendingRefresh bool
+	dirty          bool
 	searchQuery    string
+	versioning     bool
+	saveVersion    func(string)
 }
 
-func NewContentBox() *ContentBox {
+func NewContentBox(config ...*Config) *ContentBox {
 	textArea := ContentBox{
-		TextArea: tview.NewTextArea(),
-		debounce: debounce.New(300 * time.Millisecond),
+		TextArea:    tview.NewTextArea(),
+		debounce:    debounce.New(300 * time.Millisecond),
+		saveVersion: SaveFileVersion,
+	}
+
+	if len(config) > 0 && config[0] != nil {
+		textArea.versioning = config[0].Versioning
 	}
 
 	textArea.SetBorder(true).
@@ -53,13 +61,47 @@ func NewContentBox() *ContentBox {
 }
 
 func (b *ContentBox) Clear() {
+	if b.versioning && b.currentFile != nil {
+		b.flushAndSnapshot()
+	}
 	b.currentFile = nil
+	b.dirty = false
 	b.SetText("", true)
 }
 
 func (b *ContentBox) SetFile(f *FileRef) {
+	// Snapshot outgoing file before switching, but only if changing files.
+	if b.versioning && b.currentFile != nil {
+		if f == nil || f.Filename != b.currentFile.Filename {
+			b.flushAndSnapshot()
+		}
+	}
+
 	b.currentFile = f
+	b.dirty = false
 	b.SetText(GetContent(f.Filename), false)
+}
+
+// Shutdown snapshots the current file. Called on app exit.
+func (b *ContentBox) Shutdown() {
+	if b.versioning && b.currentFile != nil {
+		b.flushAndSnapshot()
+	}
+}
+
+// flushAndSnapshot persists the current editor buffer to disk and then
+// registers a version snapshot. Only acts when the user has made edits
+// (dirty flag is set), to avoid overwriting external changes.
+func (b *ContentBox) flushAndSnapshot() {
+	if !b.dirty {
+		return
+	}
+	if err := SaveContent(b.currentFile.Filename, b.GetText()); err != nil {
+		log.Printf("[WARN] flushAndSnapshot: failed to save %s: %v; skipping snapshot", b.currentFile.Filename, err)
+		return
+	}
+	b.dirty = false
+	b.saveVersion(b.currentFile.Filename)
 }
 
 // RefreshFile marks that the file may have changed on disk. The actual
@@ -161,6 +203,7 @@ func (b *ContentBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 		}
 
 		if after := b.GetText(); before != after {
+			b.dirty = true
 			b.queueSave(after)
 		}
 	})
