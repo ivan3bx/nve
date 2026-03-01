@@ -30,6 +30,8 @@ func main() {
 		searchBox  = nve.NewSearchBox(listBox, contentBox, notes)
 	)
 
+	defer contentBox.Shutdown()
+
 	notes.RegisterObservers(listBox)
 	notes.Notify()
 

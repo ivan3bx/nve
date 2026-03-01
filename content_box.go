@@ -58,8 +58,20 @@ func (b *ContentBox) Clear() {
 }
 
 func (b *ContentBox) SetFile(f *FileRef) {
+	// Snapshot outgoing file before switching
+	if b.currentFile != nil {
+		SaveFileVersion(b.currentFile.Filename)
+	}
+
 	b.currentFile = f
 	b.SetText(GetContent(f.Filename), false)
+}
+
+// Shutdown snapshots the current file. Called on app exit.
+func (b *ContentBox) Shutdown() {
+	if b.currentFile != nil {
+		SaveFileVersion(b.currentFile.Filename)
+	}
 }
 
 // RefreshFile marks that the file may have changed on disk. The actual
