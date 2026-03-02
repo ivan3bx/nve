@@ -245,15 +245,24 @@ func (b *ContentBox) handleListContinuation() bool {
 		lineStart++ // skip past the newline
 	}
 
-	currentLine := text[lineStart:start]
-	indent, marker, rest, ok := parseBulletPrefix(currentLine)
+	// Use the full line (not just up to the cursor) so that bullet detection
+	// works correctly when the cursor is positioned within the marker.
+	lineEnd := strings.Index(text[start:], "\n")
+	if lineEnd < 0 {
+		lineEnd = len(text)
+	} else {
+		lineEnd += start
+	}
+
+	fullLine := text[lineStart:lineEnd]
+	indent, marker, rest, ok := parseBulletPrefix(fullLine)
 	if !ok {
 		return false
 	}
 
 	if strings.TrimSpace(rest) == "" {
 		// Empty bullet line: remove the bullet and replace with a plain newline.
-		b.Replace(lineStart, start, "\n")
+		b.Replace(lineStart, lineEnd, "\n")
 	} else {
 		// Continue the list on the next line.
 		insertion := "\n" + nextBulletPrefix(indent, marker)
@@ -334,7 +343,12 @@ func (b *ContentBox) handleListDedent() bool {
 	if lineStart < len(text) && text[lineStart] == '\t' {
 		b.Replace(lineStart, lineStart+1, "")
 		// Restore cursor to its original relative position (shifted back by the removed tab).
-		b.Replace(cursorPos-1, cursorPos-1, "")
+		// Clamp to lineStart to avoid underflow when cursor is at the start of the line.
+		newCursorPos := cursorPos - 1
+		if newCursorPos < lineStart {
+			newCursorPos = lineStart
+		}
+		b.Replace(newCursorPos, newCursorPos, "")
 		b.dirty = true
 		b.queueSave(b.GetText())
 	}

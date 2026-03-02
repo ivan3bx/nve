@@ -229,6 +229,14 @@ func TestHandleListContinuation(t *testing.T) {
 			expectUsed: false,
 		},
 		{
+			name:       "cursor right after marker does not clear bullet",
+			filename:   "note.md",
+			text:       "- item",
+			cursorPos:  2,
+			expectText: "- \n- item",
+			expectUsed: true,
+		},
+		{
 			name:       "cursor mid-line after bullet with trailing text",
 			filename:   "note.md",
 			text:       "- hello world",
@@ -431,6 +439,15 @@ func TestListDedent(t *testing.T) {
 			expectUsed:      true,
 			expectDirty:     true,
 			expectCursorPos: 16,
+		},
+		{
+			name:            "shift-tab with cursor at line start clamps position",
+			text:            "\t- item",
+			cursorPos:       0,
+			expectText:      "- item",
+			expectUsed:      true,
+			expectDirty:     true,
+			expectCursorPos: 0,
 		},
 	}
 

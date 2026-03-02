@@ -22,7 +22,7 @@ func parseBulletPrefix(line string) (indent, marker, rest string, ok bool) {
 		return indent, marker, rest, true
 	}
 
-	// Ordered: digits followed by ". " (e.g. "1. ") or a single letter followed by ". " (e.g. "a. ")
+	// Ordered: digits followed by ". " (e.g. "1. ") or one or more lowercase letters followed by ". " (e.g. "a. ", "aa. ")
 	dotIdx := strings.Index(trimmed, ". ")
 	if dotIdx < 1 {
 		return "", "", "", false
