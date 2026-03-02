@@ -266,7 +266,7 @@ func TestHandleListContinuation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cb := NewContentBox()
 			cb.saveVersion = func(string) {}
-			cb.currentFile = &FileRef{Filename: tc.filename}
+			cb.currentFile = tempFileRef(t, tc.filename, tc.text)
 			cb.SetText(tc.text, false)
 
 			// Position cursor using Replace with empty text.
@@ -282,7 +282,7 @@ func TestHandleListContinuation(t *testing.T) {
 func TestListContinuation_NonMarkdownSkipped(t *testing.T) {
 	cb := NewContentBox()
 	cb.saveVersion = func(string) {}
-	cb.currentFile = &FileRef{Filename: "note.txt"}
+	cb.currentFile = tempFileRef(t, "note.txt", "- hello")
 	cb.SetText("- hello", false)
 	cb.Replace(7, 7, "")
 
@@ -372,7 +372,7 @@ func TestListIndent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cb := NewContentBox()
 			cb.saveVersion = func(string) {}
-			cb.currentFile = &FileRef{Filename: "note.md"}
+			cb.currentFile = tempFileRef(t, "note.md", tc.text)
 			cb.SetText(tc.text, false)
 			cb.Replace(tc.cursorPos, tc.cursorPos, "")
 
@@ -455,7 +455,7 @@ func TestListDedent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cb := NewContentBox()
 			cb.saveVersion = func(string) {}
-			cb.currentFile = &FileRef{Filename: "note.md"}
+			cb.currentFile = tempFileRef(t, "note.md", tc.text)
 			cb.SetText(tc.text, false)
 			cb.Replace(tc.cursorPos, tc.cursorPos, "")
 			cb.dirty = false
@@ -475,7 +475,7 @@ func TestListDedent(t *testing.T) {
 func TestListIndent_ViaInputHandler(t *testing.T) {
 	cb := NewContentBox()
 	cb.saveVersion = func(string) {}
-	cb.currentFile = &FileRef{Filename: "note.md"}
+	cb.currentFile = tempFileRef(t, "note.md", "- item")
 	cb.SetText("- item", false)
 	cb.Replace(6, 6, "")
 
@@ -489,7 +489,7 @@ func TestListIndent_ViaInputHandler(t *testing.T) {
 func TestListDedent_ViaInputHandler(t *testing.T) {
 	cb := NewContentBox()
 	cb.saveVersion = func(string) {}
-	cb.currentFile = &FileRef{Filename: "note.md"}
+	cb.currentFile = tempFileRef(t, "note.md", "\t- item")
 	cb.SetText("\t- item", false)
 	cb.Replace(7, 7, "")
 
@@ -503,7 +503,7 @@ func TestListDedent_ViaInputHandler(t *testing.T) {
 func TestListIndent_NonMarkdownSkipped(t *testing.T) {
 	cb := NewContentBox()
 	cb.saveVersion = func(string) {}
-	cb.currentFile = &FileRef{Filename: "note.txt"}
+	cb.currentFile = tempFileRef(t, "note.txt", "- item")
 	cb.SetText("- item", false)
 	cb.Replace(6, 6, "")
 
@@ -518,7 +518,7 @@ func TestListIndent_NonMarkdownSkipped(t *testing.T) {
 func TestListContinuation_SetsDirtyFlag(t *testing.T) {
 	cb := NewContentBox()
 	cb.saveVersion = func(string) {}
-	cb.currentFile = &FileRef{Filename: "note.md"}
+	cb.currentFile = tempFileRef(t, "note.md", "- item")
 	cb.SetText("- item", false)
 	cb.Replace(6, 6, "")
 	cb.dirty = false
