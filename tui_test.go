@@ -85,8 +85,8 @@ func TestTUI_ExternalFileCreate(t *testing.T) {
 
 func TestTUI_ExternalFileDelete(t *testing.T) {
 	h := NewTUIHarness(t, map[string]string{
-		"keeper.md":  "I stay",
-		"goner.md":   "I go away",
+		"keeper.md": "I stay",
+		"goner.md":  "I go away",
 	})
 
 	// Wait for both files

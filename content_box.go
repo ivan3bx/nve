@@ -196,6 +196,27 @@ func (b *ContentBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 	return b.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 		event = b.mapSpecialKeys(event)
 
+		// Intercept Enter in markdown files for list continuation.
+		if event.Key() == tcell.KeyEnter && b.isMarkdown() {
+			if b.handleListContinuation() {
+				return
+			}
+		}
+
+		// Intercept Tab/Shift-Tab on bullet lines for indentation.
+		if b.isMarkdown() {
+			if event.Key() == tcell.KeyTab {
+				if b.handleListIndent() {
+					return
+				}
+			}
+			if event.Key() == tcell.KeyBacktab {
+				if b.handleListDedent() {
+					return
+				}
+			}
+		}
+
 		before := b.GetText()
 
 		if handler := b.TextArea.InputHandler(); handler != nil {
@@ -207,6 +228,117 @@ func (b *ContentBox) InputHandler() func(event *tcell.EventKey, setFocus func(p 
 			b.queueSave(after)
 		}
 	})
+}
+
+// handleListContinuation checks the current line for a bullet prefix and
+// either continues the list or clears an empty bullet. Returns true if the
+// Enter key was consumed and should not be passed to TextArea.
+func (b *ContentBox) handleListContinuation() bool {
+	text := b.GetText()
+	_, start, _ := b.GetSelection()
+
+	// Find the start of the current line.
+	lineStart := strings.LastIndex(text[:start], "\n")
+	if lineStart < 0 {
+		lineStart = 0
+	} else {
+		lineStart++ // skip past the newline
+	}
+
+	currentLine := text[lineStart:start]
+	indent, marker, rest, ok := parseBulletPrefix(currentLine)
+	if !ok {
+		return false
+	}
+
+	if strings.TrimSpace(rest) == "" {
+		// Empty bullet line: remove the bullet and replace with a plain newline.
+		b.Replace(lineStart, start, "\n")
+	} else {
+		// Continue the list on the next line.
+		insertion := "\n" + nextBulletPrefix(indent, marker)
+		b.Replace(start, start, insertion)
+	}
+
+	b.dirty = true
+	b.queueSave(b.GetText())
+	return true
+}
+
+// handleListIndent inserts a tab at the beginning of the current line when
+// the cursor is on a bullet line. Returns true if the key was consumed.
+func (b *ContentBox) handleListIndent() bool {
+	text := b.GetText()
+	_, cursorPos, _ := b.GetSelection()
+
+	lineStart := strings.LastIndex(text[:cursorPos], "\n")
+	if lineStart < 0 {
+		lineStart = 0
+	} else {
+		lineStart++
+	}
+
+	currentLine := text[lineStart:cursorPos]
+	// Also consider text after the cursor on the same line.
+	lineEnd := strings.Index(text[cursorPos:], "\n")
+	if lineEnd < 0 {
+		lineEnd = len(text)
+	} else {
+		lineEnd += cursorPos
+	}
+	fullLine := text[lineStart:lineEnd]
+
+	if _, _, _, ok := parseBulletPrefix(currentLine); !ok {
+		if _, _, _, ok := parseBulletPrefix(fullLine); !ok {
+			return false
+		}
+	}
+
+	b.Replace(lineStart, lineStart, "\t")
+	// Restore cursor to its original relative position (shifted by the inserted tab).
+	b.Replace(cursorPos+1, cursorPos+1, "")
+	b.dirty = true
+	b.queueSave(b.GetText())
+	return true
+}
+
+// handleListDedent removes one leading tab from the current line when the
+// cursor is on a bullet line. Returns true if the key was consumed.
+func (b *ContentBox) handleListDedent() bool {
+	text := b.GetText()
+	_, cursorPos, _ := b.GetSelection()
+
+	lineStart := strings.LastIndex(text[:cursorPos], "\n")
+	if lineStart < 0 {
+		lineStart = 0
+	} else {
+		lineStart++
+	}
+
+	currentLine := text[lineStart:cursorPos]
+	lineEnd := strings.Index(text[cursorPos:], "\n")
+	if lineEnd < 0 {
+		lineEnd = len(text)
+	} else {
+		lineEnd += cursorPos
+	}
+	fullLine := text[lineStart:lineEnd]
+
+	if _, _, _, ok := parseBulletPrefix(currentLine); !ok {
+		if _, _, _, ok := parseBulletPrefix(fullLine); !ok {
+			return false
+		}
+	}
+
+	// Only dedent if the line starts with a tab.
+	if lineStart < len(text) && text[lineStart] == '\t' {
+		b.Replace(lineStart, lineStart+1, "")
+		// Restore cursor to its original relative position (shifted back by the removed tab).
+		b.Replace(cursorPos-1, cursorPos-1, "")
+		b.dirty = true
+		b.queueSave(b.GetText())
+	}
+	return true
 }
 
 func (b *ContentBox) mapSpecialKeys(event *tcell.EventKey) *tcell.EventKey {
