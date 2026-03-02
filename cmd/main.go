@@ -1,30 +1,65 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/ivan3bx/nve"
 	"github.com/rivo/tview"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-func main() {
-	// Setup debug logging to file
-	logFile, err := os.OpenFile("nve-debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+var rootCmd = &cobra.Command{
+	Use:          "nve",
+	Short:        "A terminal-based note-taking app inspired by Notational Velocity",
+	SilenceUsage: true,
+	RunE:         run,
+}
+
+func init() {
+	rootCmd.Flags().StringP("directory", "d", ".", "Directory containing notes")
+	viper.BindPFlag("directory", rootCmd.Flags().Lookup("directory"))
+}
+
+func run(cmd *cobra.Command, args []string) error {
+	dir := viper.GetString("directory")
+
+	// Resolve to absolute path
+	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("invalid directory: %w", err)
+	}
+
+	// Verify directory exists
+	info, err := os.Stat(absDir)
+	if err != nil {
+		return fmt.Errorf("cannot access directory %s: %w", absDir, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", absDir)
+	}
+
+	// Setup debug logging to file
+	logFile, err := os.OpenFile(filepath.Join(absDir, "nve-debug.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return fmt.Errorf("cannot create log file: %w", err)
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
 
 	config := nve.LoadConfig()
 	log.Printf("[INFO] config: versioning=%v", config.Versioning)
+	log.Printf("[INFO] notes directory: %s", absDir)
 
 	var (
 		app   = tview.NewApplication()
 		notes = nve.NewNotes(nve.NotesConfig{
-			Filepath: "./",
+			Filepath: absDir,
+			DBPath:   filepath.Join(absDir, "nve.db"),
 		})
 
 		// View hierarchy
@@ -74,6 +109,14 @@ func main() {
 		)
 
 	if err := app.SetRoot(flex, true).SetFocus(flex).EnableMouse(true).Run(); err != nil {
-		panic(err)
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
 	}
 }
