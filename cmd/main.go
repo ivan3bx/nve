@@ -14,9 +14,10 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "nve",
-	Short: "A terminal-based note-taking app inspired by Notational Velocity",
-	RunE:  run,
+	Use:          "nve",
+	Short:        "A terminal-based note-taking app inspired by Notational Velocity",
+	SilenceUsage: true,
+	RunE:         run,
 }
 
 func init() {
