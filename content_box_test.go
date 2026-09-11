@@ -1,8 +1,10 @@
 package nve
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -693,6 +695,125 @@ func TestDraw_HighlightsEachSearchTerm(t *testing.T) {
 			screen := drawContentBox(t, box, 40, 8)
 
 			assert.Equal(t, tc.expected, highlightedRuns(box, screen))
+		})
+	}
+}
+
+// hasMoreIndicator reports whether the bottom border shows moreMatchesLabel
+// in the highlight style.
+func hasMoreIndicator(box *ContentBox, screen tcell.Screen) bool {
+	x, y, width, height := box.GetRect()
+	row := y + height - 1
+	line := []rune(extractLine(screen, x, row, width))
+
+	// Rune index, since the border is drawn with multi-byte box characters.
+	col := indexRunes(line, []rune(strings.TrimSpace(moreMatchesLabel)))
+	if col < 0 {
+		return false
+	}
+
+	_, _, style, _ := screen.GetContent(x+col, row)
+	_, bg, _ := style.Decompose()
+	return bg == HighlightBackground
+}
+
+func TestDraw_MoreMatchesIndicator(t *testing.T) {
+	lines := make([]string, 30)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	lines[1] = "first needle"
+	lines[25] = "second needle"
+	content := strings.Join(lines, "\n")
+
+	testcases := []struct {
+		name     string
+		query    string
+		offset   int
+		expected bool
+	}{
+		{
+			name:     "shown when a term matches below the visible rows",
+			query:    "needle",
+			offset:   0,
+			expected: true,
+		},
+		{
+			name:     "shown when only one of several terms matches below",
+			query:    "first second",
+			offset:   0,
+			expected: true,
+		},
+		{
+			name:     "hidden when the remaining matches are above or visible",
+			query:    "needle",
+			offset:   24,
+			expected: false,
+		},
+		{
+			name:     "hidden when no term matches below",
+			query:    "first",
+			offset:   0,
+			expected: false,
+		},
+		{
+			name:     "hidden without a query",
+			query:    "",
+			offset:   0,
+			expected: false,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			box := NewContentBox()
+			box.SetFile(tempFileRef(t, "note.txt", content))
+			box.SetSearchQuery(tc.query)
+
+			// The first draw at a given size resets the offset, so draw once
+			// before scrolling.
+			screen := drawContentBox(t, box, 40, 10)
+			box.SetOffset(tc.offset, 0)
+			box.Draw(screen)
+
+			assert.Equal(t, tc.expected, hasMoreIndicator(box, screen))
+		})
+	}
+}
+
+func TestTextAfterVisible(t *testing.T) {
+	text := "alpha beta\ngamma delta\nepsilon"
+
+	testcases := []struct {
+		name     string
+		rows     []string
+		expected int
+	}{
+		{
+			name:     "locates rows at the start of the text",
+			rows:     []string{"alpha beta   ", "gamma        "},
+			expected: len("alpha beta\ngamma"),
+		},
+		{
+			name:     "locates rows wrapped differently from the text",
+			rows:     []string{"gamma", "delta epsilon"},
+			expected: len(text),
+		},
+		{
+			name:     "returns -1 for blank rows",
+			rows:     []string{"     ", "     "},
+			expected: -1,
+		},
+		{
+			name:     "returns -1 when rows are not in the text",
+			rows:     []string{"omega"},
+			expected: -1,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, textAfterVisible(text, tc.rows))
 		})
 	}
 }
