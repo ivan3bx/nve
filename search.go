@@ -12,6 +12,11 @@ import (
 	"unicode/utf8"
 )
 
+type SearchResult struct {
+	*FileRef
+	Snippet string
+}
+
 const (
 	// snippetLength is the maximum number of bytes shown for a result snippet.
 	snippetLength = 180

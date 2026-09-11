@@ -77,9 +77,7 @@ func TestFormatResult(t *testing.T) {
 			modifiedAt, _ := time.Parse(time.RFC3339, tt.modifiedAt)
 
 			fileRef := &FileRef{
-				DocumentID: 1,
 				Filename:   tt.filename,
-				MD5:        "abc123",
 				ModifiedAt: modifiedAt,
 			}
 
