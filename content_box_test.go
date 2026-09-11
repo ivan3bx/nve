@@ -590,3 +590,109 @@ func TestShutdown_Versioning(t *testing.T) {
 		})
 	}
 }
+
+// drawContentBox renders box onto a simulated screen of the given size.
+func drawContentBox(t *testing.T, box *ContentBox, width, height int) tcell.SimulationScreen {
+	t.Helper()
+	screen := tcell.NewSimulationScreen("")
+	screen.Init()
+	screen.SetSize(width, height)
+	box.SetRect(0, 0, width, height)
+	box.Draw(screen)
+	return screen
+}
+
+// highlightedRuns returns, per visible row, the runs of consecutive cells
+// drawn with the search highlight background. Rows without highlights are omitted.
+func highlightedRuns(box *ContentBox, screen tcell.Screen) [][]string {
+	x, y, width, height := box.GetInnerRect()
+	var rows [][]string
+
+	for row := y; row < y+height; row++ {
+		var runs []string
+		var run []rune
+
+		for col := 0; col < width; col++ {
+			mainc, _, style, _ := screen.GetContent(x+col, row)
+			_, bg, _ := style.Decompose()
+			if bg == HighlightBackground {
+				run = append(run, mainc)
+			} else if len(run) > 0 {
+				runs = append(runs, string(run))
+				run = nil
+			}
+		}
+		if len(run) > 0 {
+			runs = append(runs, string(run))
+		}
+		if len(runs) > 0 {
+			rows = append(rows, runs)
+		}
+	}
+
+	return rows
+}
+
+func TestDraw_HighlightsEachSearchTerm(t *testing.T) {
+	testcases := []struct {
+		name     string
+		content  string
+		query    string
+		expected [][]string
+	}{
+		{
+			name:     "highlights each term independently",
+			content:  "foo then bar",
+			query:    "foo bar",
+			expected: [][]string{{"foo", "bar"}},
+		},
+		{
+			name:     "highlights terms in any order",
+			content:  "bar then foo",
+			query:    "foo bar",
+			expected: [][]string{{"bar", "foo"}},
+		},
+		{
+			name:     "highlights adjacent terms within a word",
+			content:  "foobar",
+			query:    "foo bar",
+			expected: [][]string{{"foobar"}},
+		},
+		{
+			name:     "highlights across lines",
+			content:  "foo\nbar",
+			query:    "foo bar",
+			expected: [][]string{{"foo"}, {"bar"}},
+		},
+		{
+			name:     "is case-insensitive",
+			content:  "FOOD",
+			query:    "foo",
+			expected: [][]string{{"FOO"}},
+		},
+		{
+			name:     "highlights multi-byte runes",
+			content:  "café au lait",
+			query:    "café",
+			expected: [][]string{{"café"}},
+		},
+		{
+			name:     "highlights nothing for an empty query",
+			content:  "foo bar",
+			query:    "",
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			box := NewContentBox()
+			box.SetFile(tempFileRef(t, "note.txt", tc.content))
+			box.SetSearchQuery(tc.query)
+
+			screen := drawContentBox(t, box, 40, 8)
+
+			assert.Equal(t, tc.expected, highlightedRuns(box, screen))
+		})
+	}
+}

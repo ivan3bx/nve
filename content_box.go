@@ -24,7 +24,7 @@ type ContentBox struct {
 	currentFile    *FileRef
 	pendingRefresh bool
 	dirty          bool
-	searchQuery    string
+	highlightTerms []string
 	versioning     bool
 	saveVersion    func(string)
 }
@@ -127,12 +127,13 @@ func (b *ContentBox) flushRefresh() {
 }
 
 // SetSearchQuery updates the current search query used for highlighting.
+// The query is split into terms, each of which is highlighted independently.
 func (b *ContentBox) SetSearchQuery(query string) {
-	b.searchQuery = query
+	b.highlightTerms = strings.Fields(strings.ToLower(query))
 }
 
 // Draw renders the text area, applies markdown syntax highlighting for .md files,
-// and then highlights any occurrences of the search query.
+// and then highlights any occurrences of the search terms.
 func (b *ContentBox) Draw(screen tcell.Screen) {
 	b.TextArea.Draw(screen)
 
@@ -144,31 +145,39 @@ func (b *ContentBox) Draw(screen tcell.Screen) {
 		applyMarkdownHighlighting(screen, x, y, width, height, inCodeBlock, Zenburn)
 	}
 
-	if b.searchQuery == "" {
+	highlightSearchTerms(screen, x, y, width, height, b.highlightTerms)
+}
+
+// highlightSearchTerms applies the highlight style to every occurrence of each
+// term on the visible rows. Matching is case-insensitive and terms are lower-case.
+func highlightSearchTerms(screen tcell.Screen, x, y, width, height int, terms []string) {
+	if len(terms) == 0 {
 		return
 	}
 
-	query := strings.ToLower(b.searchQuery)
-
 	for row := y; row < y+height; row++ {
-		line := strings.ToLower(extractLine(screen, x, row, width))
+		line := []rune(extractLine(screen, x, row, width))
+		for i, r := range line {
+			line[i] = unicode.ToLower(r)
+		}
 
-		// Find all occurrences of the query in this line
-		offset := 0
-		for {
-			idx := strings.Index(line[offset:], query)
-			if idx < 0 {
-				break
+		for _, term := range terms {
+			needle := []rune(term)
+			for col := 0; col < len(line); {
+				i := indexRunes(line[col:], needle)
+				if i < 0 {
+					break
+				}
+				col += i
+				modifyStyleRange(screen, x, row, col, col+len(needle), highlightStyle)
+				col += len(needle)
 			}
-			matchStart := offset + idx
-			for i := 0; i < len(query); i++ {
-				cx := x + matchStart + i
-				mainc, combc, style, _ := screen.GetContent(cx, row)
-				screen.SetContent(cx, row, mainc, combc, style.Background(HighlightBackground).Foreground(HighlightForeground).Bold(true))
-			}
-			offset = matchStart + len(query)
 		}
 	}
+}
+
+func highlightStyle(s tcell.Style) tcell.Style {
+	return s.Background(HighlightBackground).Foreground(HighlightForeground).Bold(true)
 }
 
 // isMarkdown returns true if the current file is a markdown file.
