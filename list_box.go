@@ -103,7 +103,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 		mainText := formatResult(result, -1)
 		b.AddItem(mainText, "", 0, nil)
 
-		if selectedIndex == -1 && strings.HasPrefix(result.DisplayName(), notes.LastQuery) {
+		if selectedIndex == -1 && hasTitlePrefix(result.DisplayName(), notes.LastQuery) {
 			selectedIndex = index
 		}
 	}
@@ -122,6 +122,12 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 			b.SetOffset(b.GetCurrentItem(), 0)
 		}
 	}
+}
+
+// hasTitlePrefix reports whether name starts with query, ignoring case, so the
+// auto-selected row agrees with the case-insensitive search.
+func hasTitlePrefix(name, query string) bool {
+	return strings.HasPrefix(strings.ToLower(name), strings.ToLower(query))
 }
 
 func formatResult(result *SearchResult, lineWidth int) string {

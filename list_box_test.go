@@ -97,3 +97,43 @@ func TestFormatResult(t *testing.T) {
 		})
 	}
 }
+
+func TestHasTitlePrefix(t *testing.T) {
+	testcases := []struct {
+		name     string
+		title    string
+		query    string
+		expected bool
+	}{
+		{
+			name:     "matches an exact prefix",
+			title:    "apples in zoo",
+			query:    "apples",
+			expected: true,
+		},
+		{
+			name:     "ignores case",
+			title:    "Apples in Zoo",
+			query:    "APPLES IN",
+			expected: true,
+		},
+		{
+			name:     "rejects a non-prefix match",
+			title:    "green apples",
+			query:    "apples",
+			expected: false,
+		},
+		{
+			name:     "matches everything for an empty query",
+			title:    "anything",
+			query:    "",
+			expected: true,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, hasTitlePrefix(tc.title, tc.query))
+		})
+	}
+}
