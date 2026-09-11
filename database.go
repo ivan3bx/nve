@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3" // sqlite driver
 	"github.com/pkg/errors"
 )
 

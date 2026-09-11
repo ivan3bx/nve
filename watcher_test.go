@@ -14,11 +14,9 @@ func setupWatcherTest(t *testing.T) (*Notes, string) {
 	t.Helper()
 
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
 
 	n := NewNotes(NotesConfig{
 		Filepath: dir,
-		DBPath:   dbPath,
 	})
 
 	return n, dir
@@ -56,24 +54,21 @@ func TestWatcher_CreateFile(t *testing.T) {
 		t.Fatal("timed out waiting for watcher refresh")
 	}
 
-	// Verify the file is in the DB
-	results, err := n.db.Search("hello watcher")
+	// Verify the file is searchable
+	results, err := n.Search("hello watcher")
 	require.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Equal(t, testFile, results[0].Filename)
+	assert.Equal(t, []string{testFile}, results)
 }
 
 func TestWatcher_DeleteFile(t *testing.T) {
 	n, dir := setupWatcherTest(t)
 
-	// Create a file first and refresh to index it
+	// Create a file first
 	testFile := filepath.Join(dir, "to_delete.md")
 	require.NoError(t, os.WriteFile(testFile, []byte("delete me"), 0644))
-	_, err := n.Refresh()
-	require.NoError(t, err)
 
-	// Verify it's indexed
-	results, err := n.db.Search("delete me")
+	// Verify it's searchable
+	results, err := n.Search("delete me")
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 
@@ -89,8 +84,8 @@ func TestWatcher_DeleteFile(t *testing.T) {
 		t.Fatal("timed out waiting for watcher refresh")
 	}
 
-	// Verify it's been pruned from the DB
-	results, err = n.db.Search("delete me")
+	// Verify it no longer appears in search results
+	results, err = n.Search("delete me")
 	require.NoError(t, err)
 	assert.Len(t, results, 0)
 }

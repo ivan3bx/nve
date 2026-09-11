@@ -6,15 +6,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-
-	_ "github.com/mattn/go-sqlite3" // sqlite driver
 )
 
 var logger = log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
 
+// recentLimit is the number of results shown for an empty query.
+const recentLimit = 20
+
 type NotesConfig struct {
 	Filepath string
-	DBPath   string
 }
 
 type Notes struct {
@@ -22,30 +22,18 @@ type Notes struct {
 	LastSearchResults []*SearchResult
 
 	config    NotesConfig
-	db        *DB
 	observers []Observer
 	watcher   io.Closer
 	drawFunc  func(func())
 }
-
-var DefaultDBPath = "./nve.db"
 
 func NewNotes(config NotesConfig) *Notes {
 	if config.Filepath == "" {
 		config.Filepath, _ = os.Getwd()
 	}
 
-	if config.DBPath == "" {
-		config.DBPath = DefaultDBPath
-	}
-
 	notes := &Notes{
 		config: config,
-		db:     MustOpen(config.DBPath),
-	}
-
-	if _, err := notes.Refresh(); err != nil {
-		panic(err)
 	}
 
 	notes.Search("")
@@ -63,9 +51,9 @@ func (n *Notes) Search(text string) ([]string, error) {
 	n.LastQuery = text
 
 	if text == "" {
-		searchResults, err = n.db.Recent(20)
+		searchResults, err = recentFiles(n.config.Filepath, recentLimit)
 	} else {
-		searchResults, err = n.db.Search(text)
+		searchResults, err = searchFiles(n.config.Filepath, text)
 	}
 
 	if err != nil {
@@ -97,11 +85,7 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 		return nil, err
 	}
 
-	md5, err := calculateMD5(path)
-
-	if err != nil {
-		return nil, err
-	}
+	defer newFile.Close()
 
 	stat, err := newFile.Stat()
 
@@ -109,17 +93,10 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 		return nil, err
 	}
 
-	fileRef := FileRef{
+	return &FileRef{
 		Filename:   newFile.Name(),
-		MD5:        md5,
 		ModifiedAt: stat.ModTime(),
-	}
-
-	if err := n.db.Insert(&fileRef, []byte{}); err != nil {
-		return nil, err
-	}
-
-	return &fileRef, nil
+	}, nil
 }
 
 func (n *Notes) RegisterObservers(obs ...Observer) {
@@ -130,75 +107,4 @@ func (n *Notes) Notify() {
 	for _, obj := range n.observers {
 		obj.SearchResultsUpdate(n)
 	}
-}
-
-// Refresh syncs the database with files on disk. Returns true if any
-// changes were made (files added, updated, or pruned).
-func (n *Notes) Refresh() (bool, error) {
-	var db = n.db
-	changed := false
-
-	// Get all files currently on disk
-	files, err := scanDirectory(n.config.Filepath)
-	if err != nil {
-		return false, err
-	}
-
-	// Create a map of existing files for quick lookup
-	existingFiles := make(map[string]bool)
-	for _, file := range files {
-		existingFiles[file] = true
-	}
-
-	// Get all files currently in the database
-	dbFiles, err := db.GetAllFileRefs()
-	if err != nil {
-		return false, err
-	}
-
-	// Prune files from database that no longer exist on disk
-	refsToPrune := []*FileRef{}
-
-	for _, dbFile := range dbFiles {
-		if !existingFiles[dbFile.Filename] {
-			refsToPrune = append(refsToPrune, dbFile)
-		}
-	}
-
-	if len(refsToPrune) > 0 {
-		if err := db.PruneFileRefs(refsToPrune); err != nil {
-			logger.Printf("Error pruning files from database: %v", err)
-			return false, err
-		}
-		changed = true
-	}
-
-	// Process files that exist on disk (existing logic)
-	for _, file := range files {
-		md5, _ := calculateMD5(file)
-		stats, _ := os.Stat(file)
-
-		ref := FileRef{
-			Filename:   file,
-			MD5:        md5,
-			ModifiedAt: stats.ModTime(),
-		}
-
-		// Skip unmodified documents
-		if db.IsUnmodified(&ref) {
-			continue
-		}
-
-		bytes, err := os.ReadFile(file)
-		if err != nil {
-			return false, err
-		}
-
-		if err := db.Upsert(&ref, bytes); err != nil {
-			return false, err
-		}
-		changed = true
-	}
-
-	return changed, nil
 }

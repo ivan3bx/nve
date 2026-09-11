@@ -12,7 +12,6 @@ var notes *Notes
 func init() {
 	notes = NewNotes(NotesConfig{
 		Filepath: "./test_data",
-		DBPath:   generateTempDBPath(),
 	})
 }
 
