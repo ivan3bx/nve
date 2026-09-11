@@ -13,13 +13,14 @@ The goal is to point 'nve' to a directory of plain-text files, and quickly searc
 - 2026/02/27 - Markdown syntax highlighting; native file versioning on macOS
 - 2026/03/01 - Markdown list continuation & indentation
 - 2026/03/02 - CLI framework with `--directory` flag
+- 2026/09/11 - Replace SQLite index with file-based search
 
 ## TODO
 
 - [x] ✅ Saving edits
 - [x] ✅ Creating new notes from search box
 - [x] ✅ Display snippet in search results
-- [x] ✅ Monitor FS changes to incrementally update DB
+- [x] ✅ Monitor FS changes to refresh search results
 - [x] ✅ Colorize matching search term in content
 - [x] ✅ Syntax highlighting for Markdown files
 - [ ] Support renaming of notes (modal)
