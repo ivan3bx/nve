@@ -1,10 +1,8 @@
 package nve
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/gdamore/tcell/v2"
@@ -699,121 +697,71 @@ func TestDraw_HighlightsEachSearchTerm(t *testing.T) {
 	}
 }
 
-// hasMoreIndicator reports whether the bottom border shows moreMatchesLabel
-// in the highlight style.
-func hasMoreIndicator(box *ContentBox, screen tcell.Screen) bool {
-	x, y, width, height := box.GetRect()
-	row := y + height - 1
-	line := []rune(extractLine(screen, x, row, width))
-
-	// Rune index, since the border is drawn with multi-byte box characters.
-	col := indexRunes(line, []rune(strings.TrimSpace(moreMatchesLabel)))
-	if col < 0 {
-		return false
-	}
-
-	_, _, style, _ := screen.GetContent(x+col, row)
-	_, bg, _ := style.Decompose()
-	return bg == HighlightBackground
-}
-
-func TestDraw_MoreMatchesIndicator(t *testing.T) {
-	lines := make([]string, 30)
-	for i := range lines {
-		lines[i] = fmt.Sprintf("line %d", i)
-	}
-	lines[1] = "first needle"
-	lines[25] = "second needle"
-	content := strings.Join(lines, "\n")
-
+func TestDraw_TitleShowsMatchCount(t *testing.T) {
 	testcases := []struct {
 		name     string
+		content  string
 		query    string
-		offset   int
-		expected bool
+		expected string
 	}{
 		{
-			name:     "shown when a term matches below the visible rows",
-			query:    "needle",
-			offset:   0,
-			expected: true,
-		},
-		{
-			name:     "shown when only one of several terms matches below",
-			query:    "first second",
-			offset:   0,
-			expected: true,
-		},
-		{
-			name:     "hidden when the remaining matches are above or visible",
-			query:    "needle",
-			offset:   24,
-			expected: false,
-		},
-		{
-			name:     "hidden when no term matches below",
-			query:    "first",
-			offset:   0,
-			expected: false,
-		},
-		{
-			name:     "hidden without a query",
+			name:     "plain title without a query",
+			content:  "needle in a haystack",
 			query:    "",
-			offset:   0,
-			expected: false,
+			expected: "Content",
+		},
+		{
+			name:     "plain title when no term matches",
+			content:  "nothing here",
+			query:    "needle",
+			expected: "Content",
+		},
+		{
+			name:     "singular for one match",
+			content:  "needle in a haystack",
+			query:    "needle",
+			expected: "Content · 1 match",
+		},
+		{
+			name:     "counts every occurrence case-insensitively",
+			content:  "Needle, needle,\nNEEDLE",
+			query:    "needle",
+			expected: "Content · 3 matches",
+		},
+		{
+			name:     "sums occurrences across terms",
+			content:  "needle and hay and more hay",
+			query:    "needle hay",
+			expected: "Content · 3 matches",
 		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			box := NewContentBox()
-			box.SetFile(tempFileRef(t, "note.txt", content))
+			box.SetFile(tempFileRef(t, "note.txt", tc.content))
 			box.SetSearchQuery(tc.query)
 
-			// The first draw at a given size resets the offset, so draw once
-			// before scrolling.
-			screen := drawContentBox(t, box, 40, 10)
-			box.SetOffset(tc.offset, 0)
-			box.Draw(screen)
+			drawContentBox(t, box, 40, 10)
 
-			assert.Equal(t, tc.expected, hasMoreIndicator(box, screen))
+			assert.Equal(t, tc.expected, box.GetTitle())
 		})
 	}
 }
 
-func TestTextAfterVisible(t *testing.T) {
-	text := "alpha beta\ngamma delta\nepsilon"
+func TestDraw_TitleTracksTextChanges(t *testing.T) {
+	box := NewContentBox()
+	box.SetFile(tempFileRef(t, "note.txt", "needle"))
+	box.SetSearchQuery("needle")
 
-	testcases := []struct {
-		name     string
-		rows     []string
-		expected int
-	}{
-		{
-			name:     "locates rows at the start of the text",
-			rows:     []string{"alpha beta   ", "gamma        "},
-			expected: len("alpha beta\ngamma"),
-		},
-		{
-			name:     "locates rows wrapped differently from the text",
-			rows:     []string{"gamma", "delta epsilon"},
-			expected: len(text),
-		},
-		{
-			name:     "returns -1 for blank rows",
-			rows:     []string{"     ", "     "},
-			expected: -1,
-		},
-		{
-			name:     "returns -1 when rows are not in the text",
-			rows:     []string{"omega"},
-			expected: -1,
-		},
-	}
+	screen := drawContentBox(t, box, 40, 10)
+	assert.Equal(t, "Content · 1 match", box.GetTitle())
 
-	for _, tc := range testcases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, textAfterVisible(text, tc.rows))
-		})
-	}
+	box.SetText("needle needle", false)
+	box.Draw(screen)
+	assert.Equal(t, "Content · 2 matches", box.GetTitle())
+
+	box.SetSearchQuery("")
+	box.Draw(screen)
+	assert.Equal(t, "Content", box.GetTitle())
 }

@@ -1,6 +1,7 @@
 package nve
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
 	"strings"
@@ -17,9 +18,9 @@ const (
 	HighlightBackground = tcell.ColorYellow
 	HighlightForeground = tcell.ColorBlack
 
-	// moreMatchesLabel is drawn on the bottom border when search terms match
-	// text below the visible rows.
-	moreMatchesLabel = " >> more "
+	// contentTitle is the border title of the content pane. A match count is
+	// appended while a search query is active.
+	contentTitle = "Content"
 )
 
 type ContentBox struct {
@@ -45,7 +46,7 @@ func NewContentBox(config ...*Config) *ContentBox {
 	}
 
 	textArea.SetBorder(true).
-		SetTitle("Content").
+		SetTitle(contentTitle).
 		SetTitleColor(tcell.ColorDarkOrange).
 		SetBorderStyle(tcell.StyleDefault.Dim(true)).
 		SetBorderPadding(1, 0, 1, 1).
@@ -137,8 +138,10 @@ func (b *ContentBox) SetSearchQuery(query string) {
 }
 
 // Draw renders the text area, applies markdown syntax highlighting for .md files,
-// and then highlights any occurrences of the search terms.
+// and then highlights any occurrences of the search terms. The border title
+// shows how many occurrences the whole note contains.
 func (b *ContentBox) Draw(screen tcell.Screen) {
+	b.SetTitle(b.titleWithMatchCount())
 	b.TextArea.Draw(screen)
 
 	x, y, width, height := b.GetInnerRect()
@@ -150,102 +153,31 @@ func (b *ContentBox) Draw(screen tcell.Screen) {
 	}
 
 	highlightSearchTerms(screen, x, y, width, height, b.highlightTerms)
-
-	if b.hasMatchesBelow(screen, x, y, width, height) {
-		b.drawMoreIndicator(screen)
-	}
 }
 
-// hasMatchesBelow reports whether any search term occurs in the text that
-// follows the visible rows.
-func (b *ContentBox) hasMatchesBelow(screen tcell.Screen, x, y, width, height int) bool {
+// titleWithMatchCount returns contentTitle followed by the number of times
+// the search terms occur in the text, or contentTitle alone when there is no
+// query or no occurrences. Each term is counted independently, matching the
+// highlighted runs.
+func (b *ContentBox) titleWithMatchCount() string {
 	if len(b.highlightTerms) == 0 {
-		return false
+		return contentTitle
 	}
 
-	rows := make([]string, 0, height)
-	for row := y; row < y+height; row++ {
-		rows = append(rows, extractLine(screen, x, row, width))
-	}
-
-	text := b.GetText()
-	end := textAfterVisible(text, rows)
-	if end < 0 {
-		return false
-	}
-
-	rest := strings.ToLower(text[end:])
+	text := strings.ToLower(b.GetText())
+	count := 0
 	for _, term := range b.highlightTerms {
-		if strings.Contains(rest, term) {
-			return true
-		}
+		count += strings.Count(text, term)
 	}
 
-	return false
-}
-
-// drawMoreIndicator draws moreMatchesLabel, right-aligned on the bottom border,
-// in the same style used for highlighted matches.
-func (b *ContentBox) drawMoreIndicator(screen tcell.Screen) {
-	x, y, width, height := b.GetRect()
-	if height < 2 || width < len(moreMatchesLabel)+2 {
-		return
+	switch count {
+	case 0:
+		return contentTitle
+	case 1:
+		return contentTitle + " · 1 match"
+	default:
+		return fmt.Sprintf("%s · %d matches", contentTitle, count)
 	}
-
-	row := y + height - 1
-	col := x + width - 1 - len(moreMatchesLabel)
-	style := highlightStyle(tcell.StyleDefault)
-
-	for i, r := range moreMatchesLabel {
-		screen.SetContent(col+i, row, r, nil, style)
-	}
-}
-
-// textAfterVisible returns the byte offset in text immediately following the
-// content rendered on rows, or -1 if that content cannot be located in text.
-//
-// The TextArea wraps lines and pads rows, so whitespace is ignored on both
-// sides when locating the visible content. The wrapped-row offset exposed by
-// TextArea cannot be mapped back to a text position directly.
-func textAfterVisible(text string, rows []string) int {
-	visible := stripSpace(strings.Join(rows, ""))
-	if visible == "" {
-		return -1
-	}
-
-	// Build a whitespace-free copy of text, recording the original offset of
-	// every byte so a match position can be mapped back.
-	var stripped strings.Builder
-	offsets := make([]int, 0, len(text))
-
-	for i := 0; i < len(text); {
-		r, n := utf8.DecodeRuneInString(text[i:])
-		if !unicode.IsSpace(r) {
-			stripped.WriteString(text[i : i+n])
-			for k := 0; k < n; k++ {
-				offsets = append(offsets, i+k)
-			}
-		}
-		i += n
-	}
-
-	idx := strings.Index(stripped.String(), visible)
-	if idx < 0 {
-		return -1
-	}
-
-	return offsets[idx+len(visible)-1] + 1
-}
-
-// stripSpace removes whitespace and the zero runes tcell reports for the
-// trailing cell of wide characters.
-func stripSpace(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r == 0 || unicode.IsSpace(r) {
-			return -1
-		}
-		return r
-	}, s)
 }
 
 // highlightSearchTerms applies the highlight style to every occurrence of each
