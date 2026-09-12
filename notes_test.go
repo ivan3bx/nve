@@ -205,6 +205,15 @@ func TestSearchNarrowing(t *testing.T) {
 			},
 			expected: []string{"banana.md"},
 		},
+		{
+			name:    "renaming a note invalidates the previous results",
+			queries: []string{"ap", "app"},
+			between: func(t *testing.T, n *Notes, dir string) {
+				_, err := n.RenameNote(&FileRef{Filename: filepath.Join(dir, "apples.md")}, "apple pie")
+				require.NoError(t, err)
+			},
+			expected: []string{"apple pie.md", "zoo.md"},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -222,6 +231,87 @@ func TestSearchNarrowing(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expected, names(results))
+		})
+	}
+}
+
+func TestRenameNote(t *testing.T) {
+	testcases := []struct {
+		name        string
+		files       map[string]string
+		target      string // fixture file to rename
+		newName     string
+		expectErr   bool
+		expectFile  string // resulting file, relative to dir
+		expectGone  string // file that must no longer exist, relative to dir
+	}{
+		{
+			name:       "renames a note preserving the extension",
+			files:      map[string]string{"apples.md": "apple pie"},
+			target:     "apples.md",
+			newName:    "apple pie recipe",
+			expectFile: "apple pie recipe.md",
+			expectGone: "apples.md",
+		},
+		{
+			name:       "preserves non-markdown extensions",
+			files:      map[string]string{"scratch.txt": "notes"},
+			target:     "scratch.txt",
+			newName:    "todo",
+			expectFile: "todo.txt",
+			expectGone: "scratch.txt",
+		},
+		{
+			name:       "case-only rename",
+			files:      map[string]string{"apples.md": "apple pie"},
+			target:     "apples.md",
+			newName:    "Apples",
+			expectFile: "Apples.md",
+		},
+		{
+			name:       "same name is a no-op",
+			files:      map[string]string{"apples.md": "apple pie"},
+			target:     "apples.md",
+			newName:    "apples",
+			expectFile: "apples.md",
+		},
+		{
+			name:      "rejects an empty name",
+			files:     map[string]string{"apples.md": "apple pie"},
+			target:    "apples.md",
+			newName:   "   ",
+			expectErr: true,
+		},
+		{
+			name:      "rejects a name that already exists",
+			files:     map[string]string{"apples.md": "apple pie", "zoo.md": "at the zoo"},
+			target:    "apples.md",
+			newName:   "zoo",
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			n, dir := newTempNotes(t, tc.files)
+			ref := &FileRef{Filename: filepath.Join(dir, tc.target)}
+
+			renamed, err := n.RenameNote(ref, tc.newName)
+
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.FileExists(t, filepath.Join(dir, tc.target), "source file must be untouched")
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, filepath.Join(dir, tc.expectFile), renamed.Filename)
+			assert.FileExists(t, filepath.Join(dir, tc.expectFile))
+
+			if tc.expectGone != "" {
+				_, statErr := os.Lstat(filepath.Join(dir, tc.expectGone))
+				assert.True(t, os.IsNotExist(statErr), "expected %s to be gone", tc.expectGone)
+			}
 		})
 	}
 }

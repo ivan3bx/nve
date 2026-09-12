@@ -16,13 +16,20 @@ type ListBox struct {
 	contentView *ContentBox
 	searchView  *SearchBox
 	notes       *Notes
+
+	// previewIndex/previewName substitute the display name of a single row
+	// while a rename is in progress, so the user sees the name they are
+	// typing reflected in the list. previewIndex is -1 when inactive.
+	previewIndex int
+	previewName  string
 }
 
 func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 	box := ListBox{
-		List:        tview.NewList(),
-		contentView: contentView,
-		notes:       notes,
+		List:         tview.NewList(),
+		contentView:  contentView,
+		notes:        notes,
+		previewIndex: -1,
 	}
 
 	box.ShowSecondaryText(false).
@@ -64,7 +71,7 @@ func NewListBox(contentView *ContentBox, notes *Notes) *ListBox {
 		for i := offsetX; i < offsetX+innerHeight && i < box.GetItemCount(); i++ {
 			result := notes.LastSearchResults[i]
 			log.Printf("[DEBUG] ListBox: DrawFunc called - Item %d: %d", i, len(result.Snippet))
-			box.SetItemText(i, formatResult(result, innerWidth), "")
+			box.SetItemText(i, formatResultAs(result, box.displayNameAt(i, result), innerWidth), "")
 
 		}
 
@@ -100,7 +107,7 @@ func (b *ListBox) SearchResultsUpdate(notes *Notes) {
 	selectedIndex := -1
 
 	for index, result := range lastResult {
-		mainText := formatResult(result, -1)
+		mainText := formatResultAs(result, b.displayNameAt(index, result), -1)
 		b.AddItem(mainText, "", 0, nil)
 
 		if selectedIndex == -1 && hasTitlePrefix(result.DisplayName(), notes.LastQuery) {
@@ -130,7 +137,35 @@ func hasTitlePrefix(name, query string) bool {
 	return strings.HasPrefix(strings.ToLower(name), strings.ToLower(query))
 }
 
+// SetRenamePreview substitutes name for the display name of the row at index
+// while a rename is in progress.
+func (b *ListBox) SetRenamePreview(index int, name string) {
+	b.previewIndex = index
+	b.previewName = name
+}
+
+// ClearRenamePreview restores normal row rendering after a rename ends.
+func (b *ListBox) ClearRenamePreview() {
+	b.previewIndex = -1
+	b.previewName = ""
+}
+
+// displayNameAt returns the name to render for a row, honoring an active
+// rename preview.
+func (b *ListBox) displayNameAt(index int, result *SearchResult) string {
+	if index == b.previewIndex {
+		return b.previewName
+	}
+	return result.DisplayName()
+}
+
 func formatResult(result *SearchResult, lineWidth int) string {
+	return formatResultAs(result, result.DisplayName(), lineWidth)
+}
+
+// formatResultAs renders a result row using filename in place of the result's
+// own display name, so a rename-in-progress can be previewed.
+func formatResultAs(result *SearchResult, filename string, lineWidth int) string {
 	// Format of a single line in the list box:
 	// <filename> : <snippet> <timestamp>
 	//
@@ -152,7 +187,6 @@ func formatResult(result *SearchResult, lineWidth int) string {
 		minWidth         = widthFilename + paddingFilename + +minSnippetWidth + paddingTimestamp + widthTimestamp
 	)
 
-	filename := result.DisplayName()
 	snippet := result.Snippet
 	timestamp := formatModifiedTime(result.ModifiedAt)
 
@@ -230,6 +264,15 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 		if event.Key() == tcell.KeyEnter {
 			setFocus(lb.contentView)
 			log.Printf("[DEBUG] ListBox: Enter pressed, setting focus to content view")
+			return
+		}
+
+		// Ctrl-R initiates a rename of the selected note in the SearchBox;
+		// focus returns here when the rename ends
+		if event.Key() == tcell.KeyCtrlR {
+			log.Printf("[DEBUG] ListBox: Ctrl-R pressed, starting rename of item %d", lb.GetCurrentItem())
+			setFocus(lb.searchView)
+			lb.searchView.startRename(lb)
 			return
 		}
 

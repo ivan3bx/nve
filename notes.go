@@ -130,6 +130,45 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 	}, nil
 }
 
+// RenameNote renames the given file to a new display name, preserving the
+// original file extension. A case-only change is allowed; any other existing
+// file with the target name is a conflict. Returns the renamed FileRef.
+func (n *Notes) RenameNote(ref *FileRef, name string) (*FileRef, error) {
+	name = strings.TrimSpace(name)
+
+	if name == "" {
+		return nil, fmt.Errorf("rename: name cannot be empty")
+	}
+
+	if name == ref.DisplayName() {
+		return ref, nil
+	}
+
+	newPath := filepath.Join(n.config.Filepath, name+filepath.Ext(ref.Filename))
+
+	// A target that resolves to the source file itself (case-insensitive
+	// filesystem, case-only rename) is fine; anything else is a conflict.
+	if stat, err := os.Stat(newPath); err == nil {
+		src, serr := os.Stat(ref.Filename)
+		if serr != nil || !os.SameFile(stat, src) {
+			return nil, fmt.Errorf("rename: %q already exists", name)
+		}
+	}
+
+	if err := os.Rename(ref.Filename, newPath); err != nil {
+		return nil, fmt.Errorf("rename: %w", err)
+	}
+
+	stat, err := os.Stat(newPath)
+	if err != nil {
+		return nil, fmt.Errorf("rename: %w", err)
+	}
+
+	n.invalidate()
+
+	return &FileRef{Filename: newPath, ModifiedAt: stat.ModTime()}, nil
+}
+
 func (n *Notes) RegisterObservers(obs ...Observer) {
 	n.observers = obs
 }

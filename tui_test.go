@@ -270,3 +270,203 @@ func TestTUI_SearchHighlightsContent(t *testing.T) {
 		return line == "" || !strings.Contains(line, highlightBgEsc)
 	}, 3*time.Second)
 }
+
+func TestTUI_RenameNote(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha.md": "alpha content",
+		"beta.md":  "beta content",
+	})
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	// Filter to the target note, then start a rename with Ctrl-R
+	h.SendKeys("a", "l", "p", "h", "a")
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha") && !strings.Contains(s, "beta")
+	}, 3*time.Second)
+
+	h.SendKeys("C-r")
+
+	// Rename mode: the title changes and the input is pre-filled
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Rename")
+	}, 3*time.Second)
+
+	// Typing previews the new name in the list row. The list row is
+	// distinguished from the search box by its single-line border (│ vs ║).
+	h.SendKeys("s")
+	h.WaitFor(func(s string) bool {
+		for _, line := range strings.Split(s, "\n") {
+			if strings.Contains(line, "│ alphas") {
+				return true
+			}
+		}
+		return false
+	}, 3*time.Second)
+
+	// Enter commits the rename
+	h.SendKeys("Enter")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alphas") && strings.Contains(s, "Search Box")
+	}, 3*time.Second)
+
+	if !h.FileExists("alphas.md") {
+		t.Errorf("expected alphas.md on disk after rename")
+	}
+	if h.FileExists("alpha.md") {
+		t.Errorf("expected alpha.md to be gone after rename")
+	}
+	if content := h.ReadFile("alphas.md"); content != "alpha content" {
+		t.Errorf("expected renamed file to keep its content, got: %s", content)
+	}
+}
+
+// seedRenameFixtures creates three notes with known modtime ordering
+// (newest first: three, two, one).
+func seedRenameFixtures(h *TUIHarness) {
+	now := time.Now()
+	h.SetModTime("alpha one.md", now.Add(-3*time.Hour))
+	h.SetModTime("alpha two.md", now.Add(-2*time.Hour))
+	h.SetModTime("alpha three.md", now.Add(-1*time.Hour))
+}
+
+// searchBoxLineHas reports whether the SearchBox line (double-line border ║)
+// contains want and excludes unwanted.
+func searchBoxLineHas(screen, want, unwanted string) bool {
+	for _, line := range strings.Split(screen, "\n") {
+		if strings.Contains(line, "║") && strings.Contains(line, want) {
+			return unwanted == "" || !strings.Contains(line, unwanted)
+		}
+	}
+	return false
+}
+
+func TestTUI_RenameFromListBox(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha one.md":   "first note",
+		"alpha two.md":   "second note",
+		"alpha three.md": "third note",
+	})
+	seedRenameFixtures(h)
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	// Filter, then move into the list and select the second match
+	h.SendKeys("a", "l", "p", "h", "a")
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha two")
+	}, 3*time.Second)
+	h.SendKeys("Down")
+
+	// Ctrl-R from the list: focus moves to the search box in rename mode,
+	// pre-filled with the selected (second) note
+	h.SendKeys("C-r")
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Rename") && searchBoxLineHas(s, "alpha two", "")
+	}, 3*time.Second)
+
+	// Commit a rename of the second note
+	h.SendKeys("x", "Enter")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Search Box") && strings.Contains(s, "alpha twox")
+	}, 3*time.Second)
+
+	if !h.FileExists("alpha twox.md") {
+		t.Errorf("expected alpha twox.md on disk after rename")
+	}
+	if h.FileExists("alpha two.md") {
+		t.Errorf("expected alpha two.md to be gone after rename")
+	}
+	if !h.FileExists("alpha one.md") || !h.FileExists("alpha three.md") {
+		t.Errorf("expected other notes to be untouched")
+	}
+
+	// Focus returned to the list: typing a character forwards to the search
+	// box, replacing its text rather than appending
+	h.SendKeys("q")
+	h.WaitFor(func(s string) bool {
+		return searchBoxLineHas(s, " q ", "alpha")
+	}, 3*time.Second)
+}
+
+func TestTUI_RenameFromListBoxCancel(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha one.md":   "first note",
+		"alpha two.md":   "second note",
+		"alpha three.md": "third note",
+	})
+	seedRenameFixtures(h)
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	// Filter, move into the list, start a rename of the second match
+	h.SendKeys("a", "l", "p", "h", "a")
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha two")
+	}, 3*time.Second)
+	h.SendKeys("Down", "C-r")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Rename")
+	}, 3*time.Second)
+
+	// Type a change, then cancel with Escape
+	h.SendKeys("x", "Escape")
+
+	// Rename mode exits with the original name restored
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Search Box") && searchBoxLineHas(s, "alpha two", "")
+	}, 3*time.Second)
+
+	if !h.FileExists("alpha two.md") {
+		t.Errorf("expected alpha two.md to be untouched after cancel")
+	}
+	if h.FileExists("alpha twox.md") {
+		t.Errorf("expected no alpha twox.md after cancel")
+	}
+
+	// Focus returned to the list: typing a character forwards to the search
+	// box, replacing its text rather than appending
+	h.SendKeys("q")
+	h.WaitFor(func(s string) bool {
+		return searchBoxLineHas(s, " q ", "alpha")
+	}, 3*time.Second)
+}
+
+func TestTUI_RenameCancel(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha.md": "alpha content",
+	})
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	h.SendKeys("a", "l", "p", "h", "a", "C-r")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Rename")
+	}, 3*time.Second)
+
+	// Type a change, then cancel with Escape
+	h.SendKeys("x", "Escape")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Search Box") && !strings.Contains(s, "alphax")
+	}, 3*time.Second)
+
+	if !h.FileExists("alpha.md") {
+		t.Errorf("expected alpha.md to be untouched after cancel")
+	}
+	if h.FileExists("alphax.md") {
+		t.Errorf("expected no alphax.md after cancel")
+	}
+}
