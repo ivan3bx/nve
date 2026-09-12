@@ -196,6 +196,16 @@ func (h *TUIHarness) FileExists(name string) bool {
 	return err == nil
 }
 
+// SetModTime sets the modification time of a file in the test directory,
+// controlling its position in search results (newest first).
+func (h *TUIHarness) SetModTime(name string, mtime time.Time) {
+	h.t.Helper()
+	path := filepath.Join(h.dir, name)
+	if err := os.Chtimes(path, mtime, mtime); err != nil {
+		h.t.Fatalf("SetModTime(%s) failed: %v", name, err)
+	}
+}
+
 // RemoveFile deletes a file from the test directory.
 func (h *TUIHarness) RemoveFile(name string) {
 	h.t.Helper()

@@ -267,6 +267,15 @@ func (lb *ListBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tv
 			return
 		}
 
+		// Ctrl-R initiates a rename of the selected note in the SearchBox;
+		// focus returns here when the rename ends
+		if event.Key() == tcell.KeyCtrlR {
+			log.Printf("[DEBUG] ListBox: Ctrl-R pressed, starting rename of item %d", lb.GetCurrentItem())
+			setFocus(lb.searchView)
+			lb.searchView.startRename(lb)
+			return
+		}
+
 		// Forward non-navigational characters to SearchBox
 		if !lb.isNavigationalKey(event) {
 			log.Printf("[DEBUG] ListBox: Non-navigational key pressed, forwarding to SearchBox")
