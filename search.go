@@ -103,6 +103,12 @@ func searchFiles(root, query string) ([]*SearchResult, error) {
 		return nil, err
 	}
 
+	return searchRefs(refs, terms), nil
+}
+
+// searchRefs returns the subset of refs matching every term, ordered by
+// modification time (newest first). Files are read concurrently.
+func searchRefs(refs []*FileRef, terms [][]byte) []*SearchResult {
 	var (
 		mu      sync.Mutex
 		wg      sync.WaitGroup
@@ -134,7 +140,23 @@ func searchFiles(root, query string) ([]*SearchResult, error) {
 		return lessByModified(results[i].FileRef, results[j].FileRef)
 	})
 
-	return results, nil
+	return results
+}
+
+// restatRefs returns fresh FileRefs for the files in results that still exist,
+// so a narrowed search reflects current modification times and deletions.
+func restatRefs(results []*SearchResult) []*FileRef {
+	refs := make([]*FileRef, 0, len(results))
+
+	for _, r := range results {
+		info, err := os.Stat(r.Filename)
+		if err != nil {
+			continue
+		}
+		refs = append(refs, &FileRef{Filename: r.Filename, ModifiedAt: info.ModTime()})
+	}
+
+	return refs
 }
 
 // searchTerms splits a query into lower-cased search terms.

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var logger = log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
@@ -25,6 +26,10 @@ type Notes struct {
 	observers []Observer
 	watcher   io.Closer
 	drawFunc  func(func())
+
+	// stale forces the next search to rescan the directory instead of
+	// narrowing the previous results.
+	stale bool
 }
 
 func NewNotes(config NotesConfig) *Notes {
@@ -48,17 +53,23 @@ func (n *Notes) Search(text string) ([]string, error) {
 	)
 
 	log.Printf("[DEBUG] Notes: Search called with text='%s'", text)
-	n.LastQuery = text
 
-	if text == "" {
+	switch {
+	case text == "":
 		searchResults, err = recentFiles(n.config.Filepath, recentLimit)
-	} else {
+	case n.canNarrow(text):
+		log.Printf("[DEBUG] Notes: narrowing %d previous results", len(n.LastSearchResults))
+		searchResults = searchRefs(restatRefs(n.LastSearchResults), searchTerms(text))
+	default:
 		searchResults, err = searchFiles(n.config.Filepath, text)
 	}
 
 	if err != nil {
 		return nil, err
 	}
+
+	n.LastQuery = text
+	n.stale = false
 
 	// 1. perform the search
 	n.LastSearchResults = searchResults
@@ -77,6 +88,19 @@ func (n *Notes) Search(text string) ([]string, error) {
 	return res, nil
 }
 
+// canNarrow reports whether text extends the previous query. Extending a query
+// (adding characters or terms) can only shrink the result set, so only the
+// previous results need to be searched.
+func (n *Notes) canNarrow(text string) bool {
+	return !n.stale && strings.TrimSpace(n.LastQuery) != "" && strings.HasPrefix(text, n.LastQuery)
+}
+
+// invalidate marks the previous results as unreliable, typically because the
+// directory changed, so the next search performs a full rescan.
+func (n *Notes) invalidate() {
+	n.stale = true
+}
+
 func (n *Notes) CreateNote(name string) (*FileRef, error) {
 	path := filepath.Join(n.config.Filepath, fmt.Sprintf("%s.%s", name, "md"))
 	newFile, err := os.OpenFile(path, os.O_CREATE, 0644)
@@ -92,6 +116,8 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	n.invalidate()
 
 	return &FileRef{
 		Filename:   newFile.Name(),

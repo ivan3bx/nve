@@ -86,7 +86,7 @@ Navigation flows: SearchBox → ListBox → ContentBox (using Tab), with Escape 
 
 - **Notes** (notes.go): Central coordinator that manages the note collection, search operations, and notifies observers of changes. Uses the Observer pattern to update UI components.
 
-- **Search** (search.go): File-based search with no index. Each query walks the notes directory, reads every supported file, and matches whitespace-separated terms as case-insensitive substrings of the content or display name. Terms are unordered and independent; all must match somewhere in the file. Results are ordered by modification time, newest first.
+- **Search** (search.go): File-based search with no index. Each query walks the notes directory, reads every supported file, and matches whitespace-separated terms as case-insensitive substrings of the content or display name. Terms are unordered and independent; all must match somewhere in the file. Results are ordered by modification time, newest first. When a query extends the previous one (e.g. `app` → `appl`), only the previous results are re-checked; filesystem events and note creation invalidate this so the next search rescans.
 
 - **UI Boxes**: Each inherits from a `tview` primitive and implements custom input handlers:
   - `SearchBox`: Debounced search triggering, note creation on Enter when no results
