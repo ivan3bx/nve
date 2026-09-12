@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(tmp)
 
 	binaryPath = filepath.Join(tmp, "nve")
-	cmd := exec.Command("go", "build", "--tags=fts5", "-o", binaryPath, "./cmd/main.go")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/main.go")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

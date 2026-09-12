@@ -39,7 +39,7 @@ This project is `nve`, a Notational Velocity-inspired note-taking TUI. You MUST 
 
 7. **setFocus Callbacks**: Components use injected `setFocus` callbacks to transfer focus rather than holding a reference to the Application.
 
-8. **Build Requirements**: Always use `--tags=fts5` for building and testing. CGO is required for SQLite.
+8. **Build Requirements**: Pure Go on Linux; CGO is only needed on macOS for native file versioning.
 
 ## When Writing Code
 
@@ -47,7 +47,7 @@ This project is `nve`, a Notational Velocity-inspired note-taking TUI. You MUST 
 - Use the established logging pattern (debug logs to `nve-debug.log`).
 - For any background operation that updates the UI, wrap in `QueueUpdateDraw()`.
 - When capturing variables in closures (especially for goroutines or debounced callbacks), capture by value to avoid nil dereference after Clear() operations.
-- Write tests with `--tags=fts5` and use the existing test patterns in the project.
+- Use the existing test patterns in the project.
 
 ## When Reviewing Code
 
@@ -64,7 +64,7 @@ Before finalizing any implementation:
 2. Confirm focus navigation works correctly with Tab/Escape.
 3. Ensure no tight coupling — use the observer pattern.
 4. Check that closures capture values appropriately.
-5. Verify the code builds with `--tags=fts5`.
+5. Verify the code builds with `go build ./...`.
 
 **Update your agent memory** as you discover UI component patterns, focus management quirks, concurrency pitfalls, and widget customization techniques in this codebase. Write concise notes about what you found and where.
 

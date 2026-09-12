@@ -1,6 +1,7 @@
 package nve
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,10 @@ import (
 const (
 	HighlightBackground = tcell.ColorYellow
 	HighlightForeground = tcell.ColorBlack
+
+	// contentTitle is the border title of the content pane. A match count is
+	// appended while a search query is active.
+	contentTitle = "Content"
 )
 
 type ContentBox struct {
@@ -24,7 +29,7 @@ type ContentBox struct {
 	currentFile    *FileRef
 	pendingRefresh bool
 	dirty          bool
-	searchQuery    string
+	highlightTerms []string
 	versioning     bool
 	saveVersion    func(string)
 }
@@ -41,7 +46,7 @@ func NewContentBox(config ...*Config) *ContentBox {
 	}
 
 	textArea.SetBorder(true).
-		SetTitle("Content").
+		SetTitle(contentTitle).
 		SetTitleColor(tcell.ColorDarkOrange).
 		SetBorderStyle(tcell.StyleDefault.Dim(true)).
 		SetBorderPadding(1, 0, 1, 1).
@@ -127,13 +132,16 @@ func (b *ContentBox) flushRefresh() {
 }
 
 // SetSearchQuery updates the current search query used for highlighting.
+// The query is split into terms, each of which is highlighted independently.
 func (b *ContentBox) SetSearchQuery(query string) {
-	b.searchQuery = query
+	b.highlightTerms = strings.Fields(strings.ToLower(query))
 }
 
 // Draw renders the text area, applies markdown syntax highlighting for .md files,
-// and then highlights any occurrences of the search query.
+// and then highlights any occurrences of the search terms. The border title
+// shows how many occurrences the whole note contains.
 func (b *ContentBox) Draw(screen tcell.Screen) {
+	b.SetTitle(b.titleWithMatchCount())
 	b.TextArea.Draw(screen)
 
 	x, y, width, height := b.GetInnerRect()
@@ -144,31 +152,64 @@ func (b *ContentBox) Draw(screen tcell.Screen) {
 		applyMarkdownHighlighting(screen, x, y, width, height, inCodeBlock, Zenburn)
 	}
 
-	if b.searchQuery == "" {
+	highlightSearchTerms(screen, x, y, width, height, b.highlightTerms)
+}
+
+// titleWithMatchCount returns contentTitle followed by the number of times
+// the search terms occur in the text, or contentTitle alone when there is no
+// query or no occurrences. Each term is counted independently, matching the
+// highlighted runs.
+func (b *ContentBox) titleWithMatchCount() string {
+	if len(b.highlightTerms) == 0 {
+		return contentTitle
+	}
+
+	text := strings.ToLower(b.GetText())
+	count := 0
+	for _, term := range b.highlightTerms {
+		count += strings.Count(text, term)
+	}
+
+	switch count {
+	case 0:
+		return contentTitle
+	case 1:
+		return contentTitle + " · 1 match"
+	default:
+		return fmt.Sprintf("%s · %d matches", contentTitle, count)
+	}
+}
+
+// highlightSearchTerms applies the highlight style to every occurrence of each
+// term on the visible rows. Matching is case-insensitive and terms are lower-case.
+func highlightSearchTerms(screen tcell.Screen, x, y, width, height int, terms []string) {
+	if len(terms) == 0 {
 		return
 	}
 
-	query := strings.ToLower(b.searchQuery)
-
 	for row := y; row < y+height; row++ {
-		line := strings.ToLower(extractLine(screen, x, row, width))
+		line := []rune(extractLine(screen, x, row, width))
+		for i, r := range line {
+			line[i] = unicode.ToLower(r)
+		}
 
-		// Find all occurrences of the query in this line
-		offset := 0
-		for {
-			idx := strings.Index(line[offset:], query)
-			if idx < 0 {
-				break
+		for _, term := range terms {
+			needle := []rune(term)
+			for col := 0; col < len(line); {
+				i := indexRunes(line[col:], needle)
+				if i < 0 {
+					break
+				}
+				col += i
+				modifyStyleRange(screen, x, row, col, col+len(needle), highlightStyle)
+				col += len(needle)
 			}
-			matchStart := offset + idx
-			for i := 0; i < len(query); i++ {
-				cx := x + matchStart + i
-				mainc, combc, style, _ := screen.GetContent(cx, row)
-				screen.SetContent(cx, row, mainc, combc, style.Background(HighlightBackground).Foreground(HighlightForeground).Bold(true))
-			}
-			offset = matchStart + len(query)
 		}
 	}
+}
+
+func highlightStyle(s tcell.Style) tcell.Style {
+	return s.Background(HighlightBackground).Foreground(HighlightForeground).Bold(true)
 }
 
 // isMarkdown returns true if the current file is a markdown file.

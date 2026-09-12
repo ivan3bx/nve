@@ -2,8 +2,6 @@ FROM golang:1.25
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
-    gcc \
-    libc6-dev \
     make \
     && rm -rf /var/lib/apt/lists/*
 

@@ -92,16 +92,18 @@ func (n *Notes) watchLoop(watcher *fsnotify.Watcher) {
 	}
 }
 
+// handleWatcherRefresh re-runs the last query so results reflect the
+// current state of the notes directory. Previous results are invalidated
+// first so the search rescans rather than narrowing a stale set.
 func (n *Notes) handleWatcherRefresh() {
-	changed, err := n.Refresh()
-	if err != nil {
-		log.Printf("[ERROR] watcher: refresh failed: %v", err)
+	if n.drawFunc == nil {
 		return
 	}
 
-	if changed && n.drawFunc != nil {
-		n.drawFunc(func() {
-			n.Search(n.LastQuery)
-		})
-	}
+	n.drawFunc(func() {
+		n.invalidate()
+		if _, err := n.Search(n.LastQuery); err != nil {
+			log.Printf("[ERROR] watcher: refresh failed: %v", err)
+		}
+	})
 }

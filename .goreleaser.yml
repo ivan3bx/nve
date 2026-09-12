@@ -13,9 +13,6 @@ builds:
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
-    flags:
-      # needed to enable sqlite's FTS extension
-      - --tags=fts5
     goos:
       - linux
       - darwin

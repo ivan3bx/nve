@@ -1,6 +1,5 @@
 .vscode
 dist/
-*.db
 *.log
 .DS_Store
 
@@ -9,3 +8,6 @@ dist/
 # Claude Code - ignore local settings and agent memory
 .claude/settings.local.json
 .claude/agent-memory/
+
+# Conductor per-workspace scratch directory
+.context/

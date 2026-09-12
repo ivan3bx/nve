@@ -1,10 +1,6 @@
 package nve
 
 import (
-	"crypto/md5"
-	"fmt"
-	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,10 +16,8 @@ var SUPPORTED_FILETYPES = map[string]bool{
 }
 
 type FileRef struct {
-	DocumentID int64     `db:"id"`
-	Filename   string    `db:"filename"`
-	MD5        string    `db:"md5"`
-	ModifiedAt time.Time `db:"modified_at"`
+	Filename   string
+	ModifiedAt time.Time
 }
 
 func (f *FileRef) DisplayName() string {
@@ -42,44 +36,4 @@ func GetContent(filename string) string {
 
 func SaveContent(filename string, content string) error {
 	return os.WriteFile(filename, []byte(content), 0644)
-}
-
-func scanDirectory(dirname string) ([]string, error) {
-	var files []string
-
-	err := filepath.Walk(dirname, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && SUPPORTED_FILETYPES[filepath.Ext(path)] {
-			files = append(files, path)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return files, nil
-}
-
-func calculateMD5(path string) (string, error) {
-	file, err := os.Open(path)
-
-	if err != nil {
-		return "", err
-	}
-
-	defer file.Close()
-
-	hash := md5.New()
-
-	if _, err = io.Copy(hash, file); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }

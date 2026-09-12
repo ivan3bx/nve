@@ -6,15 +6,16 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-
-	_ "github.com/mattn/go-sqlite3" // sqlite driver
+	"strings"
 )
 
 var logger = log.New(os.Stderr, "", log.Ldate|log.Ltime|log.Lshortfile)
 
+// recentLimit is the number of results shown for an empty query.
+const recentLimit = 20
+
 type NotesConfig struct {
 	Filepath string
-	DBPath   string
 }
 
 type Notes struct {
@@ -22,33 +23,30 @@ type Notes struct {
 	LastSearchResults []*SearchResult
 
 	config    NotesConfig
-	db        *DB
 	observers []Observer
 	watcher   io.Closer
 	drawFunc  func(func())
-}
 
-var DefaultDBPath = "./nve.db"
+	// stale forces the next search to rescan the directory instead of
+	// narrowing the previous results.
+	stale bool
+}
 
 func NewNotes(config NotesConfig) *Notes {
 	if config.Filepath == "" {
 		config.Filepath, _ = os.Getwd()
 	}
 
-	if config.DBPath == "" {
-		config.DBPath = DefaultDBPath
-	}
-
 	notes := &Notes{
 		config: config,
-		db:     MustOpen(config.DBPath),
 	}
 
-	if _, err := notes.Refresh(); err != nil {
+	// Fail loudly if the notes directory cannot be scanned, rather than
+	// starting with an empty list and no indication of the problem.
+	if _, err := notes.Search(""); err != nil {
 		panic(err)
 	}
 
-	notes.Search("")
 	return notes
 }
 
@@ -60,17 +58,23 @@ func (n *Notes) Search(text string) ([]string, error) {
 	)
 
 	log.Printf("[DEBUG] Notes: Search called with text='%s'", text)
-	n.LastQuery = text
 
-	if text == "" {
-		searchResults, err = n.db.Recent(20)
-	} else {
-		searchResults, err = n.db.Search(text)
+	switch {
+	case text == "":
+		searchResults, err = recentFiles(n.config.Filepath, recentLimit)
+	case n.canNarrow(text):
+		log.Printf("[DEBUG] Notes: narrowing %d previous results", len(n.LastSearchResults))
+		searchResults = searchRefs(restatRefs(n.LastSearchResults), searchTerms(text))
+	default:
+		searchResults, err = searchFiles(n.config.Filepath, text)
 	}
 
 	if err != nil {
 		return nil, err
 	}
+
+	n.LastQuery = text
+	n.stale = false
 
 	// 1. perform the search
 	n.LastSearchResults = searchResults
@@ -89,6 +93,19 @@ func (n *Notes) Search(text string) ([]string, error) {
 	return res, nil
 }
 
+// canNarrow reports whether text extends the previous query. Extending a query
+// (adding characters or terms) can only shrink the result set, so only the
+// previous results need to be searched.
+func (n *Notes) canNarrow(text string) bool {
+	return !n.stale && strings.TrimSpace(n.LastQuery) != "" && strings.HasPrefix(text, n.LastQuery)
+}
+
+// invalidate marks the previous results as unreliable, typically because the
+// directory changed, so the next search performs a full rescan.
+func (n *Notes) invalidate() {
+	n.stale = true
+}
+
 func (n *Notes) CreateNote(name string) (*FileRef, error) {
 	path := filepath.Join(n.config.Filepath, fmt.Sprintf("%s.%s", name, "md"))
 	newFile, err := os.OpenFile(path, os.O_CREATE, 0644)
@@ -97,11 +114,7 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 		return nil, err
 	}
 
-	md5, err := calculateMD5(path)
-
-	if err != nil {
-		return nil, err
-	}
+	defer newFile.Close()
 
 	stat, err := newFile.Stat()
 
@@ -109,17 +122,12 @@ func (n *Notes) CreateNote(name string) (*FileRef, error) {
 		return nil, err
 	}
 
-	fileRef := FileRef{
+	n.invalidate()
+
+	return &FileRef{
 		Filename:   newFile.Name(),
-		MD5:        md5,
 		ModifiedAt: stat.ModTime(),
-	}
-
-	if err := n.db.Insert(&fileRef, []byte{}); err != nil {
-		return nil, err
-	}
-
-	return &fileRef, nil
+	}, nil
 }
 
 func (n *Notes) RegisterObservers(obs ...Observer) {
@@ -130,75 +138,4 @@ func (n *Notes) Notify() {
 	for _, obj := range n.observers {
 		obj.SearchResultsUpdate(n)
 	}
-}
-
-// Refresh syncs the database with files on disk. Returns true if any
-// changes were made (files added, updated, or pruned).
-func (n *Notes) Refresh() (bool, error) {
-	var db = n.db
-	changed := false
-
-	// Get all files currently on disk
-	files, err := scanDirectory(n.config.Filepath)
-	if err != nil {
-		return false, err
-	}
-
-	// Create a map of existing files for quick lookup
-	existingFiles := make(map[string]bool)
-	for _, file := range files {
-		existingFiles[file] = true
-	}
-
-	// Get all files currently in the database
-	dbFiles, err := db.GetAllFileRefs()
-	if err != nil {
-		return false, err
-	}
-
-	// Prune files from database that no longer exist on disk
-	refsToPrune := []*FileRef{}
-
-	for _, dbFile := range dbFiles {
-		if !existingFiles[dbFile.Filename] {
-			refsToPrune = append(refsToPrune, dbFile)
-		}
-	}
-
-	if len(refsToPrune) > 0 {
-		if err := db.PruneFileRefs(refsToPrune); err != nil {
-			logger.Printf("Error pruning files from database: %v", err)
-			return false, err
-		}
-		changed = true
-	}
-
-	// Process files that exist on disk (existing logic)
-	for _, file := range files {
-		md5, _ := calculateMD5(file)
-		stats, _ := os.Stat(file)
-
-		ref := FileRef{
-			Filename:   file,
-			MD5:        md5,
-			ModifiedAt: stats.ModTime(),
-		}
-
-		// Skip unmodified documents
-		if db.IsUnmodified(&ref) {
-			continue
-		}
-
-		bytes, err := os.ReadFile(file)
-		if err != nil {
-			return false, err
-		}
-
-		if err := db.Upsert(&ref, bytes); err != nil {
-			return false, err
-		}
-		changed = true
-	}
-
-	return changed, nil
 }

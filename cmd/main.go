@@ -59,7 +59,6 @@ func run(cmd *cobra.Command, args []string) error {
 		app   = tview.NewApplication()
 		notes = nve.NewNotes(nve.NotesConfig{
 			Filepath: absDir,
-			DBPath:   filepath.Join(absDir, "nve.db"),
 		})
 
 		// View hierarchy

@@ -40,9 +40,6 @@ excluded_paths:
 # main package path, can also be a single file, multiple files separated by commas
 build_pkg: "./cmd"
 
-# build tags
-build_tags: "sqlite_fts5"
-
 # Commands that can be executed before build the app
 # prev_build_cmds:
 #   - swag init

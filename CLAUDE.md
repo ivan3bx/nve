@@ -22,26 +22,27 @@ make release-local
 
 ### Testing
 ```bash
-# Run all tests (IMPORTANT: must include --tags=fts5 for SQLite FTS support)
+# Run all tests
 make test
 
 # Run tests directly with Go
-go test ./... --tags=fts5 --count=1
+go test ./... --count=1
 
 # Run a specific test
-go test -run TestName --tags=fts5
+go test -run TestName
+
+# Run TUI integration tests (requires tmux)
+make test-tui
 ```
 
 ### Running the Application
 ```bash
 # Run from source
-go run --tags=fts5 cmd/main.go
+go run cmd/main.go
 
 # Or run the built binary
 ./dist/nve_linux_amd64_v1/nve
 ```
-
-**Critical**: Always include `--tags=fts5` when building or testing. This enables SQLite's Full-Text Search (FTS5) extension, which is essential for the application's search functionality.
 
 ### Committing code
 
@@ -85,9 +86,7 @@ Navigation flows: SearchBox → ListBox → ContentBox (using Tab), with Escape 
 
 - **Notes** (notes.go): Central coordinator that manages the note collection, search operations, and notifies observers of changes. Uses the Observer pattern to update UI components.
 
-- **Database** (database.go): SQLite wrapper with FTS5 for full-text search. Maintains two tables:
-  - `documents`: Stores file metadata (filename, MD5 hash, modification time)
-  - `content_index`: FTS5 virtual table for searching filename and text content
+- **Search** (search.go): File-based search with no index. Each query walks the notes directory, reads every supported file, and matches whitespace-separated terms as case-insensitive substrings of the content or display name. Terms are unordered and independent; all must match somewhere in the file. Results are ordered by modification time, newest first. When a query extends the previous one (e.g. `app` → `appl`), only the previous results are re-checked; filesystem events and note creation invalidate this so the next search rescans.
 
 - **UI Boxes**: Each inherits from a `tview` primitive and implements custom input handlers:
   - `SearchBox`: Debounced search triggering, note creation on Enter when no results
@@ -104,25 +103,23 @@ Navigation flows: SearchBox → ListBox → ContentBox (using Tab), with Escape 
    - Search queries are triggered immediately on text change
    - File saves are debounced (300ms) to avoid excessive disk writes
 
-4. **File Indexing**: On startup and refresh, the app scans the directory, calculates MD5 hashes, and updates the database only for modified files. Deleted files are pruned from the database.
+4. **Filesystem Refresh**: A watcher (watcher.go) re-runs the last query when files under the notes directory change, so results always reflect what is on disk.
 
 ### File Support
 
 Supported file types: `.txt`, `.md`, `.mdown`, `.go`, `.rb` (see `SUPPORTED_FILETYPES` in files.go)
 
-All files are expected to be plain text and searchable via FTS5.
+All files are expected to be plain text.
 
 ## Development Notes
 
 - **Logging**: Debug logs are written to `nve-debug.log` in the working directory
-- **Database**: `nve.db` is created in the working directory and persists the search index
 - **Test Data**: The `test_data/` directory contains sample markdown files for testing
-- **CGO**: SQLite driver requires CGO, which is enabled by default but may need special handling for cross-compilation
+- **CGO**: Only needed on macOS, for native file versioning (versions_darwin.m). Linux builds are pure Go.
 
 ## Build Configuration
 
 The project uses goreleaser for multi-platform builds:
 - Targets: Linux and macOS (amd64 + arm64)
 - Binary name: `nve`
-- Build flags: `--tags=fts5` (critical for SQLite FTS support)
 - Releases are drafted but not auto-published

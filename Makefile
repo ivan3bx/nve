@@ -22,11 +22,11 @@ build-local:
 
 .PHONY: test
 test:
-	go test ./... --tags=fts5 --count=1
+	go test ./... --count=1
 
 .PHONY: test-tui
 test-tui:
-	go test --tags="fts5 integration" -run TestTUI --count=1 -v
+	go test --tags=integration -run TestTUI --count=1 -v
 
 .PHONY: test-docker
 test-docker:
