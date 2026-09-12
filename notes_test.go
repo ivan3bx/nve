@@ -19,6 +19,12 @@ func init() {
 	})
 }
 
+func TestNewNotesPanicsOnUnreadableDirectory(t *testing.T) {
+	assert.Panics(t, func() {
+		NewNotes(NotesConfig{Filepath: filepath.Join(t.TempDir(), "does-not-exist")})
+	})
+}
+
 func TestSearch(t *testing.T) {
 	/*
 		Following tests rely on the fixture files within "./test_data"

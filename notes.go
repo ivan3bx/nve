@@ -41,7 +41,12 @@ func NewNotes(config NotesConfig) *Notes {
 		config: config,
 	}
 
-	notes.Search("")
+	// Fail loudly if the notes directory cannot be scanned, rather than
+	// starting with an empty list and no indication of the problem.
+	if _, err := notes.Search(""); err != nil {
+		panic(err)
+	}
+
 	return notes
 }
 
