@@ -189,6 +189,13 @@ func (h *TUIHarness) ReadFile(name string) string {
 	return string(data)
 }
 
+// FileExists reports whether a file exists in the test directory.
+func (h *TUIHarness) FileExists(name string) bool {
+	h.t.Helper()
+	_, err := os.Stat(filepath.Join(h.dir, name))
+	return err == nil
+}
+
 // RemoveFile deletes a file from the test directory.
 func (h *TUIHarness) RemoveFile(name string) {
 	h.t.Helper()

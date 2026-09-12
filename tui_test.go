@@ -270,3 +270,86 @@ func TestTUI_SearchHighlightsContent(t *testing.T) {
 		return line == "" || !strings.Contains(line, highlightBgEsc)
 	}, 3*time.Second)
 }
+
+func TestTUI_RenameNote(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha.md": "alpha content",
+		"beta.md":  "beta content",
+	})
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	// Filter to the target note, then start a rename with Ctrl-R
+	h.SendKeys("a", "l", "p", "h", "a")
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha") && !strings.Contains(s, "beta")
+	}, 3*time.Second)
+
+	h.SendKeys("C-r")
+
+	// Rename mode: the title changes and the input is pre-filled
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Rename")
+	}, 3*time.Second)
+
+	// Typing previews the new name in the list row. The list row is
+	// distinguished from the search box by its single-line border (│ vs ║).
+	h.SendKeys("s")
+	h.WaitFor(func(s string) bool {
+		for _, line := range strings.Split(s, "\n") {
+			if strings.Contains(line, "│ alphas") {
+				return true
+			}
+		}
+		return false
+	}, 3*time.Second)
+
+	// Enter commits the rename
+	h.SendKeys("Enter")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alphas") && strings.Contains(s, "Search Box")
+	}, 3*time.Second)
+
+	if !h.FileExists("alphas.md") {
+		t.Errorf("expected alphas.md on disk after rename")
+	}
+	if h.FileExists("alpha.md") {
+		t.Errorf("expected alpha.md to be gone after rename")
+	}
+	if content := h.ReadFile("alphas.md"); content != "alpha content" {
+		t.Errorf("expected renamed file to keep its content, got: %s", content)
+	}
+}
+
+func TestTUI_RenameCancel(t *testing.T) {
+	h := NewTUIHarness(t, map[string]string{
+		"alpha.md": "alpha content",
+	})
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "alpha")
+	}, 5*time.Second)
+
+	h.SendKeys("a", "l", "p", "h", "a", "C-r")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Rename")
+	}, 3*time.Second)
+
+	// Type a change, then cancel with Escape
+	h.SendKeys("x", "Escape")
+
+	h.WaitFor(func(s string) bool {
+		return strings.Contains(s, "Search Box") && !strings.Contains(s, "alphax")
+	}, 3*time.Second)
+
+	if !h.FileExists("alpha.md") {
+		t.Errorf("expected alpha.md to be untouched after cancel")
+	}
+	if h.FileExists("alphax.md") {
+		t.Errorf("expected no alphax.md after cancel")
+	}
+}

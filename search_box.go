@@ -2,6 +2,7 @@ package nve
 
 import (
 	"log"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -13,6 +14,12 @@ type SearchBox struct {
 	contentView      *ContentBox
 	notes            *Notes
 	updatingFromList bool
+
+	// renaming tracks rename mode: the input edits the selected note's name
+	// instead of searching, and the list previews the new name as it is typed.
+	renaming     bool
+	renameIndex  int
+	renameTarget *FileRef
 }
 
 // SetTextFromList updates the search box text from list selection without triggering search
@@ -115,11 +122,109 @@ func (sb *SearchBox) handleArrowKey(event *tcell.EventKey, setFocus func(p tview
 	}
 }
 
+// IsRenaming reports whether rename mode is active, so the global input
+// handler can leave keys (like Escape) for the rename to handle.
+func (sb *SearchBox) IsRenaming() bool {
+	return sb.renaming
+}
+
+// startRename enters rename mode for the currently selected note, pre-filling
+// the input with its display name.
+func (sb *SearchBox) startRename() {
+	if sb.renaming {
+		return
+	}
+
+	index := sb.listView.GetCurrentItem()
+	if index < 0 || index >= len(sb.notes.LastSearchResults) {
+		return
+	}
+
+	sb.renaming = true
+	sb.renameIndex = index
+	sb.renameTarget = sb.notes.LastSearchResults[index].FileRef
+	sb.SetTitle("Rename")
+	sb.SetTextFromList(sb.renameTarget.DisplayName())
+	sb.listView.SetRenamePreview(index, sb.renameTarget.DisplayName())
+}
+
+// commitRename applies the typed name, then searches for it so the renamed
+// note stays selected.
+func (sb *SearchBox) commitRename() {
+	name := strings.TrimSpace(sb.GetText())
+
+	if name == "" || name == sb.renameTarget.DisplayName() {
+		sb.cancelRename()
+		return
+	}
+
+	if _, err := sb.notes.RenameNote(sb.renameTarget, name); err != nil {
+		log.Printf("[WARN] SearchBox: rename failed: %v", err)
+		sb.SetTitle("Rename (name unavailable)")
+		return
+	}
+
+	sb.endRename()
+	sb.notes.Search(name)
+}
+
+// cancelRename exits rename mode, restoring the input to the note's name.
+func (sb *SearchBox) cancelRename() {
+	target := sb.renameTarget
+	sb.endRename()
+	if target != nil {
+		sb.SetTextFromList(target.DisplayName())
+	}
+}
+
+func (sb *SearchBox) endRename() {
+	sb.renaming = false
+	sb.renameIndex = -1
+	sb.renameTarget = nil
+	sb.SetTitle("Search Box")
+	sb.listView.ClearRenamePreview()
+}
+
+// handleRenameInput processes keys while renaming: typing updates the list
+// preview instead of searching, Enter commits, Escape cancels.
+func (sb *SearchBox) handleRenameInput(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+	switch event.Key() {
+	case tcell.KeyEnter:
+		sb.commitRename()
+		return
+	case tcell.KeyEscape:
+		sb.cancelRename()
+		return
+	case tcell.KeyUp, tcell.KeyDown, tcell.KeyCtrlN, tcell.KeyCtrlP, tcell.KeyCtrlR:
+		// Keep the list selection pinned to the rename target.
+		return
+	}
+
+	before := sb.GetText()
+
+	if handler := sb.InputField.InputHandler(); handler != nil {
+		handler(event, setFocus)
+	}
+
+	if after := sb.GetText(); after != before {
+		sb.SetTitle("Rename") // clear any previous error
+		sb.listView.SetRenamePreview(sb.renameIndex, after)
+	}
+}
+
 // InputHandler overrides default handling to switch focus away from search box when necessary.
 func (sb *SearchBox) InputHandler() func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
 	return sb.WrapInputHandler(func(event *tcell.EventKey, setFocus func(p tview.Primitive)) {
+		if sb.renaming {
+			sb.handleRenameInput(event, setFocus)
+			return
+		}
+
 		// Handle special keys first
 		switch event.Key() {
+		case tcell.KeyCtrlR:
+			sb.startRename()
+			return
 		case tcell.KeyEnter:
 			if sb.GetText() == "" {
 				return

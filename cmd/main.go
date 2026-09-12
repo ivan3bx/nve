@@ -79,6 +79,15 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// global input events
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// During a rename, the SearchBox handles everything itself; only
+		// swallow Tab so focus cannot leave mid-rename.
+		if searchBox.IsRenaming() {
+			if event.Key() == tcell.KeyTab {
+				return &tcell.EventKey{}
+			}
+			return event
+		}
+
 		switch event.Key() {
 		case tcell.KeyTab:
 			if searchBox.HasFocus() {
