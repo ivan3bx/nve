@@ -23,6 +23,6 @@ The goal is to point 'nve' to a directory of plain-text files, and quickly searc
 - [x] ✅ Monitor FS changes to refresh search results
 - [x] ✅ Colorize matching search term in content
 - [x] ✅ Syntax highlighting for Markdown files
-- [ ] Support renaming of notes (modal)
+- [x] ✅ Support renaming of notes
 
 <image src="https://user-images.githubusercontent.com/179345/212459798-29c7c2e1-71fc-4323-9da4-6cdcff09f598.png" width="620"/>
